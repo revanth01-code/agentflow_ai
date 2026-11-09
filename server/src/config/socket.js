@@ -1,13 +1,39 @@
+const { Server } = require('socket.io');
+
 let io;
 
 function initSocket(server, clientUrl) {
-  // TODO: Create the socket.io server with CORS for clientUrl and handle the
-  // TODO: 'workflow:join' and 'execution:join' events by joining the matching rooms.
+  io = new Server(server, {
+    cors: {
+      origin: clientUrl || '*',
+      credentials: true
+    }
+  });
+
+  io.on('connection', (socket) => {
+    socket.on('workflow:join', (workflowId) => {
+      if (workflowId) {
+        socket.join(`workflow:${workflowId}`);
+      }
+    });
+
+    socket.on('execution:join', (executionId) => {
+      if (executionId) {
+        socket.join(`execution:${executionId}`);
+      }
+    });
+  });
+
   return io;
 }
 
 function emitEvent(channel, event, payload) {
-  // TODO: Emit the event to the given room, or broadcast it when no channel is passed.
+  if (!io) return;
+  if (channel) {
+    io.to(channel).emit(event, payload);
+  } else {
+    io.emit(event, payload);
+  }
 }
 
 module.exports = { initSocket, emitEvent };

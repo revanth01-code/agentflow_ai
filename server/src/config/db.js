@@ -4,15 +4,26 @@ const env = require('./env');
 let usingMemoryStore = true;
 
 async function connectDatabase() {
-  // TODO: Return the memory-fallback status when env.mongoUri is empty.
-  // TODO: Otherwise connect with mongoose (autoIndex, serverSelectionTimeoutMS) and
-  // TODO: return { status: 'connected' }, falling back to memory mode on failure.
-  return { status: 'memory-fallback', reason: 'connectDatabase is not implemented yet' };
+  if (!env.mongoUri) {
+    usingMemoryStore = true;
+    return { status: 'memory-fallback', reason: 'MONGO_URI not provided' };
+  }
+
+  try {
+    await mongoose.connect(env.mongoUri, {
+      autoIndex: true,
+      serverSelectionTimeoutMS: 5000
+    });
+    usingMemoryStore = false;
+    return { status: 'connected' };
+  } catch (error) {
+    usingMemoryStore = true;
+    return { status: 'memory-fallback', reason: error.message };
+  }
 }
 
 function isMemoryStore() {
-  // TODO: Return true while the memory store is active or mongoose is not connected.
-  return usingMemoryStore;
+  return usingMemoryStore || mongoose.connection.readyState !== 1;
 }
 
 module.exports = { connectDatabase, isMemoryStore };

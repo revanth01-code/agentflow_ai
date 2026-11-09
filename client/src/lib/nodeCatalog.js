@@ -48,12 +48,24 @@ export const nodeGroups = [
 ];
 
 export function nodeTemplate(type, label, category, index = 0) {
-  // TODO: Return a React Flow node with a unique id, a staggered position based on the
-  // TODO: index, and the default data config (retries and backoff strategy).
+  const id = `${type}-${Date.now().toString().slice(-4)}-${index + 1}`;
   return {
-    id: type,
-    type,
-    position: { x: 0, y: 0 },
-    data: { type, label, category, config: {} }
+    id,
+    type: 'workflowNode',
+    position: {
+      x: 100 + (index % 3) * 260,
+      y: 120 + Math.floor(index / 3) * 160
+    },
+    data: {
+      id,
+      type,
+      label: label || type,
+      category: category || 'action',
+      config: {
+        retries: 3,
+        backoffStrategy: 'exponential'
+      },
+      status: 'idle'
+    }
   };
 }

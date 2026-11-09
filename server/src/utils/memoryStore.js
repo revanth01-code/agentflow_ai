@@ -15,33 +15,65 @@ function now() {
 }
 
 function clone(value) {
-  // TODO: Return a deep copy so callers cannot mutate the stored records.
-  return value;
+  if (value === undefined || value === null) return value;
+  return JSON.parse(JSON.stringify(value));
 }
 
 function insert(collection, data) {
-  // TODO: Push a record with a generated _id plus createdAt / updatedAt and return a copy.
-  return null;
+  if (!collections[collection]) {
+    collections[collection] = [];
+  }
+  const timestamp = now();
+  const record = {
+    _id: data && data._id ? String(data._id) : nanoid(),
+    ...clone(data),
+    createdAt: data && data.createdAt ? data.createdAt : timestamp,
+    updatedAt: data && data.updatedAt ? data.updatedAt : timestamp
+  };
+  collections[collection].push(record);
+  return clone(record);
 }
 
 function list(collection, filter = {}) {
-  // TODO: Return the records in the collection that match every filter entry.
-  return [];
+  const records = collections[collection] || [];
+  const entries = Object.entries(filter || {});
+  if (entries.length === 0) return records.map(clone);
+  return records
+    .filter((item) => entries.every(([key, val]) => String(item[key]) === String(val)))
+    .map(clone);
 }
 
 function findOne(collection, filter = {}) {
-  // TODO: Return the first record that matches every filter entry, or null.
-  return null;
+  const records = collections[collection] || [];
+  const entries = Object.entries(filter || {});
+  const match = records.find((item) =>
+    entries.every(([key, val]) => String(item[key]) === String(val))
+  );
+  return match ? clone(match) : null;
 }
 
 function update(collection, id, patch) {
-  // TODO: Merge the patch into the matching record, refresh updatedAt, and return a copy.
-  return null;
+  const records = collections[collection] || [];
+  const index = records.findIndex((item) => String(item._id) === String(id));
+  if (index === -1) return null;
+  const existing = records[index];
+  const updated = {
+    ...existing,
+    ...clone(patch),
+    _id: existing._id,
+    createdAt: existing.createdAt,
+    updatedAt: now()
+  };
+  records[index] = updated;
+  return clone(updated);
 }
 
 function remove(collection, id) {
-  // TODO: Delete the matching record and report whether it existed.
-  return false;
+  const records = collections[collection] || [];
+  const index = records.findIndex((item) => String(item._id) === String(id));
+  if (index === -1) return false;
+  records.splice(index, 1);
+  return true;
 }
 
 module.exports = { collections, insert, list, findOne, update, remove };

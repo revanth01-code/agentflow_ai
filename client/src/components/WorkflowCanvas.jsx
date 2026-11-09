@@ -18,7 +18,34 @@ import NodePalette from './NodePalette';
 import { useWorkflowStore } from '../store/workflowStore';
 
 function exportJson(workflow, nodes, edges) {
-  // TODO: Serialize the workflow with its nodes and edges and trigger a JSON file download.
+  const data = {
+    name: workflow?.name || 'Workflow Export',
+    description: workflow?.description || '',
+    trigger: workflow?.trigger || { type: 'manual' },
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      type: n.data?.type || n.type,
+      label: n.data?.label || n.label,
+      category: n.data?.category || '',
+      position: n.position,
+      config: n.data?.config || {},
+      status: n.data?.status || 'idle'
+    })),
+    edges: edges.map((e) => ({
+      id: e.id,
+      source: typeof e.source === 'object' ? e.source.id : e.source,
+      target: typeof e.target === 'object' ? e.target.id : e.target,
+      label: e.label || '',
+      animated: e.animated !== false
+    }))
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${(data.name || 'workflow').toLowerCase().replace(/\s+/g, '_')}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 const categoryStyles = {
@@ -68,21 +95,54 @@ function WorkflowNode({ id, data, selected, onRemove }) {
   );
 }
 
-function fallbackPosition(node, index) {
-  // TODO: Return the saved x / y when both are finite numbers, otherwise a grid position.
-  return { x: 0, y: 0 };
+function fallbackPosition(node, index = 0) {
+  if (
+    node?.position &&
+    typeof node.position.x === 'number' &&
+    Number.isFinite(node.position.x) &&
+    typeof node.position.y === 'number' &&
+    Number.isFinite(node.position.y)
+  ) {
+    return { x: node.position.x, y: node.position.y };
+  }
+  return { x: 100 + (index % 4) * 260, y: 150 + Math.floor(index / 4) * 160 };
 }
 
 function normalizeImportedNode(node, index = 0) {
-  // TODO: Convert an imported node (React Flow shape or stored shape) into a
-  // TODO: 'workflowNode' with a valid position and data payload.
-  return null;
+  if (!node) return null;
+  const id = String(node.id || `node-${index + 1}`);
+  const type = node.data?.type || node.type || 'workflowNode';
+  const label = node.data?.label || node.label || type;
+  const category = node.data?.category || node.category || 'action';
+  const config = node.data?.config || node.config || {};
+  const status = node.data?.status || node.status || 'idle';
+  return {
+    id,
+    type: 'workflowNode',
+    position: fallbackPosition(node, index),
+    data: { id, type, label, category, config, status }
+  };
 }
 
 function normalizeImportedEdges(edges = [], nodes = []) {
-  // TODO: Give every imported edge an id, resolve its source and target, and keep only
-  // TODO: the edges that connect two known nodes.
-  return [];
+  if (!Array.isArray(edges)) return [];
+  const validNodeIds = new Set((nodes || []).map((n) => (n && n.id ? String(n.id) : '')).filter(Boolean));
+  return edges
+    .map((edge, index) => {
+      const source = typeof edge.source === 'object' ? edge.source?.id : edge.source;
+      const target = typeof edge.target === 'object' ? edge.target?.id : edge.target;
+      const sStr = String(source || '');
+      const tStr = String(target || '');
+      if (!validNodeIds.has(sStr) || !validNodeIds.has(tStr)) return null;
+      return {
+        id: edge.id || `e-${sStr}-${tStr}-${index}`,
+        source: sStr,
+        target: tStr,
+        label: edge.label || '',
+        animated: edge.animated !== false
+      };
+    })
+    .filter(Boolean);
 }
 
 function WorkflowCanvasInner() {
@@ -98,55 +158,110 @@ function WorkflowCanvasInner() {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [message, setMessage] = useState('');
   const { fitView } = useReactFlow();
+
   const selectedNode = useMemo(() => {
-    // TODO: Return the node matching selectedNodeId.
-    return null;
+    return nodes.find((n) => n.id === selectedNodeId) || null;
   }, [nodes, selectedNodeId]);
 
   useEffect(() => {
-    // TODO: Fit the graph into the viewport whenever the node or edge count changes.
+    fitView({ padding: 0.2 });
   }, [fitView, nodes.length, edges.length]);
 
   const onNodesChange = useCallback((changes) => {
-    // TODO: Apply the React Flow node changes to the store.
+    setNodes(applyNodeChanges(changes, nodes));
   }, [nodes, setNodes]);
 
   const onEdgesChange = useCallback((changes) => {
-    // TODO: Apply the React Flow edge changes to the store.
+    setEdges(applyEdgeChanges(changes, edges));
   }, [edges, setEdges]);
 
   const onConnect = useCallback((connection) => {
-    // TODO: Add the new animated edge for the connection to the store.
+    setEdges(addEdge({ ...connection, animated: true }, edges));
   }, [edges, setEdges]);
 
   const removeNode = useCallback((nodeId) => {
-    // TODO: Remove the node plus every edge attached to it, and clear the selection.
-  }, []);
+    setNodes(nodes.filter((n) => n.id !== nodeId));
+    setEdges(edges.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    if (selectedNodeId === nodeId) setSelectedNodeId(null);
+  }, [nodes, edges, selectedNodeId, setNodes, setEdges]);
 
   const nodeTypes = useMemo(() => ({
     workflowNode: (props) => <WorkflowNode {...props} onRemove={removeNode} />
   }), [removeNode]);
 
-  const onAddNode = (node) => {
-    // TODO: Append the palette node to the canvas as a 'workflowNode' and show a hint.
+  const onAddNode = (paletteNode) => {
+    const index = nodes.length;
+    const id = `${paletteNode.type}-${Date.now().toString().slice(-4)}`;
+    const newNode = {
+      id,
+      type: 'workflowNode',
+      position: { x: 120 + (index % 3) * 260, y: 120 + Math.floor(index / 3) * 160 },
+      data: {
+        id,
+        type: paletteNode.type,
+        label: paletteNode.label,
+        category: paletteNode.category,
+        config: paletteNode.config || {},
+        status: 'idle'
+      }
+    };
+    setNodes([...nodes, newNode]);
+    setMessage(`Added node: ${paletteNode.label}`);
+    setTimeout(() => setMessage(''), 3000);
   };
 
   const onNodeUpdate = (updatedNode) => {
-    // TODO: Replace the matching node in the store with the edited version.
+    setNodes(nodes.map((n) => (n.id === updatedNode.id ? updatedNode : n)));
   };
 
   const importFile = async (file) => {
-    // TODO: Read the JSON file, normalize its nodes and edges, and load them onto the canvas.
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const importedNodes = (json.nodes || []).map(normalizeImportedNode).filter(Boolean);
+      const importedEdges = normalizeImportedEdges(json.edges, importedNodes);
+      setNodes(importedNodes);
+      setEdges(importedEdges);
+      setMessage(`Imported ${importedNodes.length} nodes from file.`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage(`Import failed: ${err.message}`);
+    }
   };
 
   const handleSave = async () => {
-    // TODO: Require at least one node, save through the store, and report the result.
-    return null;
+    if (nodes.length === 0) {
+      setMessage('Cannot save an empty workflow. Add at least one node.');
+      return null;
+    }
+    try {
+      const saved = await saveWorkflow();
+      setMessage(`Saved workflow: ${saved.name}`);
+      setTimeout(() => setMessage(''), 3000);
+      return saved;
+    } catch (err) {
+      setMessage(`Save failed: ${err.message}`);
+      return null;
+    }
   };
 
   const handleExecute = async () => {
-    // TODO: Require nodes, save the workflow first when it has no id, run the execution,
-    // TODO: and report the resulting status or error.
+    if (nodes.length === 0) {
+      setMessage('Cannot execute an empty workflow.');
+      return;
+    }
+    try {
+      let current = activeWorkflow;
+      if (!current?._id) {
+        current = await saveWorkflow();
+      }
+      setMessage('Executing workflow with AI agent orchestration...');
+      const result = await executeWorkflow();
+      setMessage(`Execution finished: ${result.status} in ${result.durationMs}ms`);
+      setTimeout(() => setMessage(''), 5000);
+    } catch (err) {
+      setMessage(`Execution failed: ${err.message}`);
+    }
   };
 
   return (

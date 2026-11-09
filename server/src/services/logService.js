@@ -4,13 +4,35 @@ const ExecutionLog = require('../models/ExecutionLog');
 const { emitEvent } = require('../config/socket');
 
 async function createLog({ execution, workflow, nodeId, agent, level = 'info', event, message, metadata = {} }) {
-  // TODO: Persist the log entry, then emit it on the execution and workflow socket rooms.
-  return null;
+  const logData = {
+    execution: String(execution),
+    workflow: String(workflow),
+    nodeId: nodeId ? String(nodeId) : null,
+    agent: agent || 'orchestrator',
+    level: level || 'info',
+    event: event || 'log',
+    message: String(message || ''),
+    metadata: metadata || {}
+  };
+
+  let saved;
+  if (isMemoryStore()) {
+    saved = memoryStore.insert('executionLogs', logData);
+  } else {
+    saved = await ExecutionLog.create(logData);
+  }
+
+  emitEvent(`execution:${execution}`, 'execution:log', saved);
+  emitEvent(`workflow:${workflow}`, 'workflow:log', saved);
+  return saved;
 }
 
 async function listLogs(filter = {}) {
-  // TODO: Return the matching logs sorted by createdAt ascending.
-  return [];
+  if (isMemoryStore()) {
+    const logs = memoryStore.list('executionLogs', filter);
+    return logs.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }
+  return ExecutionLog.find(filter).sort({ createdAt: 1 }).lean();
 }
 
 module.exports = { createLog, listLogs };

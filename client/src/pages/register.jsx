@@ -9,11 +9,21 @@ export default function Register() {
   const register = useAuthStore((state) => state.register);
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
-    // TODO: Create the account through the auth store, redirect to /dashboard, and show
-    // TODO: the API error message on failure.
+    setError('');
+    setLoading(true);
+    try {
+      await register(form);
+      router.push('/dashboard');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Registration failed';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -31,17 +41,41 @@ export default function Register() {
         {error && <p className="mb-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         <label className="block text-sm font-medium text-slate-700">
           Name
-          <input className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600"
+            required
+            value={form.name}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
+          />
         </label>
         <label className="mt-4 block text-sm font-medium text-slate-700">
           Email
-          <input className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600"
+            type="email"
+            required
+            value={form.email}
+            onChange={(event) => setForm({ ...form, email: event.target.value })}
+          />
         </label>
         <label className="mt-4 block text-sm font-medium text-slate-700">
           Password
-          <input className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600"
+            type="password"
+            required
+            minLength={8}
+            value={form.password}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+          />
         </label>
-        <button className="mt-6 w-full rounded bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800" type="submit">Register</button>
+        <button
+          disabled={loading}
+          className="mt-6 w-full rounded bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+          type="submit"
+        >
+          {loading ? 'Registering...' : 'Register'}
+        </button>
         <p className="mt-4 text-center text-sm text-slate-500">
           Already registered? <Link href="/login" className="font-semibold text-teal-700">Sign in</Link>
         </p>

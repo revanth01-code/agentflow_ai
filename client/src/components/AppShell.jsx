@@ -16,7 +16,8 @@ export default function AppShell({ children, title = 'AI Operations' }) {
   const { user, logout } = useAuthStore();
 
   const handleLogout = () => {
-    // TODO: Clear the session through the auth store and send the user to /login.
+    logout();
+    router.push('/login');
   };
 
   return (

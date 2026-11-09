@@ -5,9 +5,30 @@ const { getLangGraphStatus } = require('../agents/orchestrator');
 const { queues, queueNames } = require('../queues');
 
 const health = asyncHandler(async (_req, res) => {
-  // TODO: Report the database mode, redis configuration, queue names, queue mode,
-  // TODO: AI provider readiness (OpenRouter, Gemini), and the LangGraph status.
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const isRedisConnected = Boolean(env.redisUrl);
+  const queueMode = queues.workflowExecutionQueue.fallback ? 'in-memory' : 'bullmq-redis';
+
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    database: {
+      mode: isMemoryStore() ? 'memory-fallback' : 'mongodb',
+      connected: !isMemoryStore()
+    },
+    redis: {
+      configured: isRedisConnected,
+      mode: isRedisConnected ? 'connected' : 'disabled'
+    },
+    queues: {
+      mode: queueMode,
+      names: queueNames
+    },
+    aiProviders: {
+      openRouter: Boolean(env.openRouterApiKey),
+      gemini: Boolean(env.geminiApiKey)
+    },
+    langGraph: getLangGraphStatus()
+  });
 });
 
 module.exports = { health };

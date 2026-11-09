@@ -2,33 +2,33 @@ const asyncHandler = require('../utils/asyncHandler');
 const executionService = require('../services/executionService');
 
 const list = asyncHandler(async (req, res) => {
-  // TODO: Respond with the executions, optionally filtered by req.query.workflowId.
-  res.status(501).json({ message: 'List executions is not implemented yet' });
+  const data = await executionService.listExecutions(req.query.workflowId);
+  res.status(200).json(data);
 });
 
 const get = asyncHandler(async (req, res) => {
-  // TODO: Respond with the execution for req.params.id.
-  res.status(501).json({ message: 'Get execution is not implemented yet' });
+  const data = await executionService.getExecution(req.params.id);
+  res.status(200).json(data);
 });
 
 const timeline = asyncHandler(async (req, res) => {
-  // TODO: Respond with the agent log timeline for the execution.
-  res.status(501).json({ message: 'Execution timeline is not implemented yet' });
+  const data = await executionService.executionTimeline(req.params.id);
+  res.status(200).json(data);
 });
 
 const pause = asyncHandler(async (req, res) => {
-  // TODO: Move the execution to PAUSED and respond with the updated record.
-  res.status(501).json({ message: 'Pause execution is not implemented yet' });
+  const data = await executionService.pauseExecution(req.params.id);
+  res.status(200).json(data);
 });
 
 const resume = asyncHandler(async (req, res) => {
-  // TODO: Re-run the workflow for the paused execution and respond with the new record.
-  res.status(501).json({ message: 'Resume execution is not implemented yet' });
+  const data = await executionService.resumeExecution(req.params.id);
+  res.status(200).json(data);
 });
 
 const cancel = asyncHandler(async (req, res) => {
-  // TODO: Move the execution to CANCELLED and respond with the updated record.
-  res.status(501).json({ message: 'Cancel execution is not implemented yet' });
+  const data = await executionService.cancelExecution(req.params.id);
+  res.status(200).json(data);
 });
 
 module.exports = { list, get, timeline, pause, resume, cancel };

@@ -1,10 +1,34 @@
 const { classifyFailure, backoffMs } = require('../services/retryService');
 
-async function recoveryAgent({ error, attempt }) {
-  // TODO: Classify the failure, decide between 'escalate' and 'retry_with_backoff'
-  // TODO: (integration, credential, and permission errors always escalate), and return
-  // TODO: the backoff delay plus the fallback strategy.
-  return { agent: 'recovery', category: 'API_FAILURE', action: 'escalate', delayMs: 0, fallback: '' };
+async function recoveryAgent({ error, attempt = 0 }) {
+  const category = classifyFailure(error);
+  const msg = String(error?.message || error || '').toLowerCase();
+  const alwaysEscalate =
+    msg.includes('credential') ||
+    msg.includes('permission') ||
+    msg.includes('forbidden') ||
+    msg.includes('integration') ||
+    msg.includes('not connected') ||
+    msg.includes('invalid email');
+
+  if (alwaysEscalate || attempt >= 3) {
+    return {
+      agent: 'recovery',
+      category,
+      action: 'escalate',
+      delayMs: 0,
+      fallback: 'Manual intervention required or verify integration credentials.'
+    };
+  }
+
+  const delay = backoffMs(attempt);
+  return {
+    agent: 'recovery',
+    category,
+    action: 'retry_with_backoff',
+    delayMs: delay,
+    fallback: `Auto-retry scheduled in ${delay}ms`
+  };
 }
 
 module.exports = recoveryAgent;

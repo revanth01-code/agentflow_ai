@@ -7,25 +7,106 @@ const ApiError = require('../utils/apiError');
 const User = require('../models/User');
 
 function signToken(user) {
-  // TODO: Sign a JWT with the user id and email using env.jwtSecret and env.jwtExpiresIn.
-  return '';
+  const userId = user._id ? String(user._id) : user.id;
+  return jwt.sign(
+    { id: userId, email: user.email, role: user.role || 'operator' },
+    env.jwtSecret,
+    { expiresIn: env.jwtExpiresIn }
+  );
 }
 
 function sanitizeUser(user) {
-  // TODO: Convert the document to a plain object and strip the password field.
-  return null;
+  if (!user) return null;
+  const obj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
+  delete obj.password;
+  delete obj.__v;
+  if (obj._id) {
+    obj._id = String(obj._id);
+  }
+  return obj;
 }
 
 async function register({ name, email, password }) {
-  // TODO: Normalize the email, reject duplicates with 409, hash the password in memory mode,
-  // TODO: create the user, and return { user, token }.
-  throw new ApiError(501, 'Register service is not implemented yet');
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!name || !normalizedEmail || !password) {
+    throw new ApiError(400, 'Name, email and password are required');
+  }
+
+  if (isMemoryStore()) {
+    const existing = memoryStore.findOne('users', { email: normalizedEmail });
+    if (existing) {
+      throw new ApiError(409, 'User already exists with this email');
+    }
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const created = memoryStore.insert('users', {
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: 'operator',
+      lastLoginAt: new Date().toISOString()
+    });
+    const sanitized = sanitizeUser(created);
+    const token = signToken(created);
+    return { user: sanitized, token };
+  }
+
+  const existing = await User.findOne({ email: normalizedEmail });
+  if (existing) {
+    throw new ApiError(409, 'User already exists with this email');
+  }
+
+  const user = await User.create({
+    name: name.trim(),
+    email: normalizedEmail,
+    password,
+    role: 'operator',
+    lastLoginAt: new Date()
+  });
+
+  const sanitized = sanitizeUser(user);
+  const token = signToken(user);
+  return { user: sanitized, token };
 }
 
 async function login({ email, password }) {
-  // TODO: Look up the user in the memory store or MongoDB, compare the password,
-  // TODO: stamp lastLoginAt, and return { user, token } or throw a 401.
-  throw new ApiError(501, 'Login service is not implemented yet');
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail || !password) {
+    throw new ApiError(400, 'Email and password are required');
+  }
+
+  if (isMemoryStore()) {
+    const user = memoryStore.findOne('users', { email: normalizedEmail });
+    if (!user) {
+      throw new ApiError(401, 'Invalid email or password');
+    }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      throw new ApiError(401, 'Invalid email or password');
+    }
+    const lastLoginAt = new Date().toISOString();
+    const updated = memoryStore.update('users', user._id, { lastLoginAt }) || user;
+    const sanitized = sanitizeUser(updated);
+    const token = signToken(updated);
+    return { user: sanitized, token };
+  }
+
+  const user = await User.findOne({ email: normalizedEmail }).select('+password');
+  if (!user) {
+    throw new ApiError(401, 'Invalid email or password');
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    throw new ApiError(401, 'Invalid email or password');
+  }
+
+  user.lastLoginAt = new Date();
+  await user.save();
+
+  const sanitized = sanitizeUser(user);
+  const token = signToken(user);
+  return { user: sanitized, token };
 }
 
-module.exports = { register, login, sanitizeUser };
+module.exports = { register, login, sanitizeUser, signToken };

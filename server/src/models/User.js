@@ -1,18 +1,28 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-// TODO: Define the fields: name, email (unique, lowercase), password (select: false),
-// TODO: role ('admin' | 'operator'), and lastLoginAt.
-const UserSchema = new mongoose.Schema({}, { timestamps: true });
+const UserSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: { type: String, required: true, select: false },
+  role: { type: String, enum: ['admin', 'operator'], default: 'operator' },
+  lastLoginAt: { type: Date }
+}, { timestamps: true });
 
 UserSchema.pre('save', async function hashPassword(next) {
-  // TODO: Hash the password with bcrypt when it has been modified.
-  next();
+  if (!this.isModified('password')) return next();
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
-UserSchema.methods.comparePassword = function comparePassword(password) {
-  // TODO: Compare the candidate password with the stored hash.
-  return false;
+UserSchema.methods.comparePassword = async function comparePassword(password) {
+  if (!this.password) return false;
+  return bcrypt.compare(password, this.password);
 };
 
 module.exports = mongoose.model('User', UserSchema);

@@ -8,7 +8,13 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  // TODO: Read the saved token from localStorage and set the Authorization header.
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('agentflow_token');
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
   return config;
 });
 

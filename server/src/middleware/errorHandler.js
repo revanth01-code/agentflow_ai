@@ -1,6 +1,12 @@
 function errorHandler(error, _req, res, _next) {
-  // TODO: Include error.details in the response payload.
-  res.status(error.statusCode || 500).json({ message: error.message || 'Unexpected server error' });
+  const statusCode = error.statusCode || 500;
+  const payload = {
+    message: error.message || 'Unexpected server error'
+  };
+  if (error.details) {
+    payload.details = error.details;
+  }
+  res.status(statusCode).json(payload);
 }
 
 module.exports = errorHandler;

@@ -8,11 +8,17 @@ function ExecutionsContent() {
   const [selectedExecutionId, setSelectedExecutionId] = useState('');
 
   useEffect(() => {
-    // TODO: Load the executions on mount, then select the newest one and load its timeline.
+    fetchExecutions().then((data) => {
+      if (Array.isArray(data) && data.length > 0) {
+        setSelectedExecutionId(data[0]._id);
+        fetchTimeline(data[0]._id);
+      }
+    });
   }, [fetchExecutions, fetchTimeline]);
 
   const selectExecution = async (executionId) => {
-    // TODO: Store the selected execution id and load its agent timeline.
+    setSelectedExecutionId(executionId);
+    await fetchTimeline(executionId);
   };
 
   return (
@@ -36,7 +42,7 @@ function ExecutionsContent() {
                 </div>
                 <p className="text-xs text-slate-500">{new Date(execution.createdAt).toLocaleString()}</p>
                 <p className="mt-2 text-xs font-medium text-slate-600">
-                  {Object.keys(execution.output?.output || {}).length} node steps completed
+                  {Object.keys(execution.output || {}).length} node steps completed
                 </p>
               </button>
             ))}

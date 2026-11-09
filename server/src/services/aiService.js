@@ -9,71 +9,319 @@ const nodeCatalog = {
   logic: ['if-else', 'retry', 'delay', 'approval', 'parallel-execution']
 };
 
-function extractEmail(prompt) {
-  // TODO: Return the first email address found in the prompt.
-  return '';
+function extractEmail(prompt = '') {
+  const match = String(prompt).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0] : '';
 }
 
-function extractQuotedText(prompt, fallback) {
-  // TODO: Return the last quoted phrase in the prompt, or the fallback.
+function extractQuotedText(prompt = '', fallback = '') {
+  const matches = [...String(prompt).matchAll(/["']([^"']+)["']/g)];
+  if (matches.length > 0) {
+    return matches[matches.length - 1][1];
+  }
   return fallback;
 }
 
-function extractSubject(prompt) {
-  // TODO: Return the quoted subject from the prompt, defaulting to 'Automation Test'.
-  return 'Automation Test';
+function extractSubject(prompt = '') {
+  const match = String(prompt).match(/subject\s*[:=]?\s*["']([^"']+)["']/i);
+  if (match) return match[1];
+  return extractQuotedText(prompt, 'Automation Test');
 }
 
-function isEmailAutomationPrompt(prompt) {
-  // TODO: Return true when the prompt asks for an email send action.
-  return false;
+function isEmailAutomationPrompt(prompt = '') {
+  return /(send|email|mail|gmail|message)/i.test(prompt);
 }
 
-function buildEmailWorkflow(prompt) {
-  // TODO: Build the manual-trigger to send-email graph using the recipient, subject,
-  // TODO: and body extracted from the prompt.
-  return { name: '', description: prompt, trigger: { type: 'manual' }, nodes: [], edges: [], tags: [] };
+function buildEmailWorkflow(prompt = '') {
+  const recipient = extractEmail(prompt) || 'recipient@example.com';
+  const subject = extractSubject(prompt);
+  const nodes = [
+    {
+      id: 'manual-trigger-1',
+      type: 'manual-trigger',
+      label: 'Manual Trigger',
+      category: 'triggers',
+      position: { x: 100, y: 150 },
+      config: {},
+      status: 'idle'
+    },
+    {
+      id: 'send-email-1',
+      type: 'send-email',
+      label: 'Send Email',
+      category: 'actions',
+      position: { x: 420, y: 150 },
+      config: {
+        to: recipient,
+        subject: subject,
+        body: prompt || 'Automated message from AgentFlow AI'
+      },
+      status: 'idle'
+    }
+  ];
+  const edges = [
+    {
+      id: 'e-manual-trigger-1-send-email-1',
+      source: 'manual-trigger-1',
+      target: 'send-email-1',
+      animated: true
+    }
+  ];
+  return {
+    name: 'Email Operations Workflow',
+    description: prompt,
+    trigger: { type: 'manual', config: {} },
+    nodes,
+    edges,
+    tags: ['email', 'operations']
+  };
 }
 
-function buildFallbackWorkflow(prompt) {
-  // TODO: Build the deterministic offline graph: pick the trigger, AI extraction, the
-  // TODO: notification channel (email / Slack / Discord), the optional Google Sheets row,
-  // TODO: the decision node, and the approval escalation, then wire the edges.
-  return { name: 'AI Generated Workflow', description: prompt, trigger: { type: 'manual' }, nodes: [], edges: [] };
+function buildFallbackWorkflow(prompt = '') {
+  const promptLower = String(prompt).toLowerCase();
+  let triggerType = 'manual-trigger';
+  let triggerLabel = 'Manual Trigger';
+  if (promptLower.includes('gmail') || promptLower.includes('email trigger')) {
+    triggerType = 'gmail-trigger';
+    triggerLabel = 'Gmail Trigger';
+  } else if (promptLower.includes('webhook')) {
+    triggerType = 'webhook-trigger';
+    triggerLabel = 'Webhook Trigger';
+  } else if (promptLower.includes('schedule') || promptLower.includes('cron')) {
+    triggerType = 'schedule-trigger';
+    triggerLabel = 'Schedule Trigger';
+  }
+
+  let actionType = 'send-email';
+  let actionLabel = 'Send Email';
+  if (promptLower.includes('discord')) {
+    actionType = 'send-discord-message';
+    actionLabel = 'Send Discord Message';
+  } else if (promptLower.includes('slack')) {
+    actionType = 'send-slack-message';
+    actionLabel = 'Send Slack Message';
+  } else if (promptLower.includes('sheet')) {
+    actionType = 'google-sheets-row';
+    actionLabel = 'Google Sheets Row';
+  }
+
+  const nodes = [
+    {
+      id: `${triggerType}-1`,
+      type: triggerType,
+      label: triggerLabel,
+      category: 'triggers',
+      position: { x: 100, y: 150 },
+      config: {},
+      status: 'idle'
+    },
+    {
+      id: 'ai-extraction-1',
+      type: 'ai-extraction',
+      label: 'AI Data Extraction',
+      category: 'ai',
+      position: { x: 380, y: 150 },
+      config: { prompt: prompt || 'Extract key entities' },
+      status: 'idle'
+    },
+    {
+      id: `${actionType}-1`,
+      type: actionType,
+      label: actionLabel,
+      category: 'actions',
+      position: { x: 680, y: 150 },
+      config: {
+        to: extractEmail(prompt) || 'team@example.com',
+        subject: extractSubject(prompt),
+        message: prompt
+      },
+      status: 'idle'
+    },
+    {
+      id: 'approval-1',
+      type: 'approval',
+      label: 'Operator Approval',
+      category: 'logic',
+      position: { x: 960, y: 150 },
+      config: { requireConfirmation: false },
+      status: 'idle'
+    }
+  ];
+
+  const edges = [
+    {
+      id: `e-${triggerType}-1-ai-extraction-1`,
+      source: `${triggerType}-1`,
+      target: 'ai-extraction-1',
+      animated: true
+    },
+    {
+      id: `e-ai-extraction-1-${actionType}-1`,
+      source: 'ai-extraction-1',
+      target: `${actionType}-1`,
+      animated: true
+    },
+    {
+      id: `e-${actionType}-1-approval-1`,
+      source: `${actionType}-1`,
+      target: 'approval-1',
+      animated: true
+    }
+  ];
+
+  return {
+    name: 'AI Operations Workflow',
+    description: prompt,
+    trigger: { type: triggerType.replace('-trigger', ''), config: {} },
+    nodes,
+    edges,
+    tags: ['agentic', 'workflow']
+  };
 }
 
 function hasUsableNodes(graph) {
-  // TODO: Return true when the graph has at least one node with an id and a type.
-  return false;
+  return Boolean(
+    graph &&
+    Array.isArray(graph.nodes) &&
+    graph.nodes.length > 0 &&
+    graph.nodes.some((node) => node && node.id && node.type)
+  );
 }
 
-function sanitizeGeneratedWorkflow(graph, prompt) {
-  // TODO: Validate the model output, normalize every node (id, type, label, category,
-  // TODO: position, config), merge email defaults for email prompts, keep only edges
-  // TODO: between known nodes, and return the persisted workflow shape.
+function extractJson(text = '') {
+  if (!text) return null;
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+  } catch (_err) {
+    return null;
+  }
   return null;
 }
 
-function extractJson(text) {
-  // TODO: Pull the first JSON object out of the model response and parse it.
-  return null;
+function sanitizeGeneratedWorkflow(graph, prompt = '') {
+  if (!graph || !Array.isArray(graph.nodes)) return null;
+
+  const validNodes = [];
+  const knownIds = new Set();
+
+  graph.nodes.forEach((node, index) => {
+    if (!node || !node.type) return;
+    const id = String(node.id || `${node.type}-${index + 1}`);
+    knownIds.add(id);
+
+    let category = node.category;
+    if (!category) {
+      if (nodeCatalog.triggers.includes(node.type)) category = 'triggers';
+      else if (nodeCatalog.actions.includes(node.type)) category = 'actions';
+      else if (nodeCatalog.ai.includes(node.type)) category = 'ai';
+      else category = 'logic';
+    }
+
+    const posX = node.position && typeof node.position.x === 'number' ? node.position.x : 100 + index * 260;
+    const posY = node.position && typeof node.position.y === 'number' ? node.position.y : 150;
+
+    validNodes.push({
+      id,
+      type: node.type,
+      label: node.label || node.type,
+      category,
+      position: { x: posX, y: posY },
+      config: node.config && typeof node.config === 'object' ? node.config : {},
+      status: 'idle'
+    });
+  });
+
+  if (validNodes.length === 0) return null;
+
+  const validEdges = [];
+  if (Array.isArray(graph.edges)) {
+    graph.edges.forEach((edge, index) => {
+      const source = typeof edge.source === 'object' ? edge.source?.id : edge.source;
+      const target = typeof edge.target === 'object' ? edge.target?.id : edge.target;
+      if (knownIds.has(source) && knownIds.has(target)) {
+        validEdges.push({
+          id: edge.id || `e-${source}-${target}-${index}`,
+          source,
+          target,
+          label: edge.label || '',
+          animated: edge.animated !== false,
+          condition: edge.condition || ''
+        });
+      }
+    });
+  }
+
+  return {
+    name: graph.name || 'AI Generated Workflow',
+    description: graph.description || prompt,
+    trigger: graph.trigger || { type: 'manual', config: {} },
+    nodes: validNodes,
+    edges: validEdges,
+    tags: Array.isArray(graph.tags) ? graph.tags : ['ai-generated']
+  };
 }
 
 async function generateWithOpenRouter(prompt) {
-  // TODO: Call the OpenRouter chat completions API with the node catalog system prompt
-  // TODO: and return the parsed JSON graph, or null when no API key is configured.
-  return null;
+  if (!env.openRouterApiKey) return null;
+  try {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: env.openRouterModel || 'anthropic/claude-3.5-sonnet',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.`
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${env.openRouterApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 25000
+      }
+    );
+    const content = response.data?.choices?.[0]?.message?.content;
+    return extractJson(content);
+  } catch (_err) {
+    return null;
+  }
 }
 
 async function generateWithGemini(prompt) {
-  // TODO: Call the Gemini model and return the parsed JSON graph, or null when no key is set.
-  return null;
+  if (!env.geminiApiKey) return null;
+  try {
+    const genAI = new GoogleGenerativeAI(env.geminiApiKey);
+    const model = genAI.getGenerativeModel({ model: env.geminiModel || 'gemini-1.5-flash' });
+    const promptText = `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}. User request: ${prompt}`;
+    const result = await model.generateContent(promptText);
+    const text = result.response.text();
+    return extractJson(text);
+  } catch (_err) {
+    return null;
+  }
 }
 
 async function generateWorkflow(prompt) {
-  // TODO: Try OpenRouter, then Gemini, sanitize the result, and fall back to the
-  // TODO: deterministic offline graph when the AI providers fail or return nothing usable.
-  throw new Error('Workflow generation is not implemented yet');
+  let graph = await generateWithOpenRouter(prompt);
+  if (!hasUsableNodes(graph)) {
+    graph = await generateWithGemini(prompt);
+  }
+  if (hasUsableNodes(graph)) {
+    const sanitized = sanitizeGeneratedWorkflow(graph, prompt);
+    if (sanitized) return sanitized;
+  }
+  if (isEmailAutomationPrompt(prompt)) {
+    return buildEmailWorkflow(prompt);
+  }
+  return buildFallbackWorkflow(prompt);
 }
 
 module.exports = { generateWorkflow, nodeCatalog };

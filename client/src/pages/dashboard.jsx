@@ -10,7 +10,8 @@ function DashboardContent() {
   const { dashboard, workflows, fetchDashboard, fetchWorkflows } = useWorkflowStore();
 
   useEffect(() => {
-    // TODO: Load the dashboard statistics and the workflow list when the page mounts.
+    fetchDashboard();
+    fetchWorkflows();
   }, [fetchDashboard, fetchWorkflows]);
 
   return (

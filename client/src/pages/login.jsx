@@ -9,10 +9,21 @@ export default function Login() {
   const login = useAuthStore((state) => state.login);
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
-    // TODO: Sign in through the auth store, redirect to /dashboard, and show the API error.
+    setError('');
+    setLoading(true);
+    try {
+      await login(form);
+      router.push('/dashboard');
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Login failed';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -30,13 +41,31 @@ export default function Login() {
         {error && <p className="mb-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         <label className="block text-sm font-medium text-slate-700">
           Email
-          <input className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600" type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600"
+            type="email"
+            required
+            value={form.email}
+            onChange={(event) => setForm({ ...form, email: event.target.value })}
+          />
         </label>
         <label className="mt-4 block text-sm font-medium text-slate-700">
           Password
-          <input className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2 outline-none focus:border-teal-600"
+            type="password"
+            required
+            value={form.password}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+          />
         </label>
-        <button className="mt-6 w-full rounded bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800" type="submit">Login</button>
+        <button
+          disabled={loading}
+          className="mt-6 w-full rounded bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+          type="submit"
+        >
+          {loading ? 'Signing in...' : 'Login'}
+        </button>
         <p className="mt-4 text-center text-sm text-slate-500">
           New workspace? <Link href="/register" className="font-semibold text-teal-700">Create an account</Link>
         </p>

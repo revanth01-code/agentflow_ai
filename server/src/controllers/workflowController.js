@@ -2,51 +2,50 @@ const asyncHandler = require('../utils/asyncHandler');
 const workflowService = require('../services/workflowService');
 const executionService = require('../services/executionService');
 
-const ownerId = (req) => String(req.user._id);
-
 const list = asyncHandler(async (req, res) => {
-  // TODO: Respond with every workflow owned by the current user.
-  res.status(501).json({ message: 'List workflows is not implemented yet' });
+  const data = await workflowService.listWorkflows(req.user);
+  res.status(200).json(data);
 });
 
 const create = asyncHandler(async (req, res) => {
-  // TODO: Create the workflow from req.body and respond with 201.
-  res.status(501).json({ message: 'Create workflow is not implemented yet' });
+  const data = await workflowService.createWorkflow(req.body, req.user);
+  res.status(201).json(data);
 });
 
 const get = asyncHandler(async (req, res) => {
-  // TODO: Respond with the owned workflow for req.params.id.
-  res.status(501).json({ message: 'Get workflow is not implemented yet' });
+  const data = await workflowService.getWorkflow(req.params.id, req.user);
+  res.status(200).json(data);
 });
 
 const update = asyncHandler(async (req, res) => {
-  // TODO: Update the owned workflow with req.body and respond with the saved document.
-  res.status(501).json({ message: 'Update workflow is not implemented yet' });
+  const data = await workflowService.updateWorkflow(req.params.id, req.user, req.body);
+  res.status(200).json(data);
 });
 
 const duplicate = asyncHandler(async (req, res) => {
-  // TODO: Duplicate the owned workflow and respond with 201.
-  res.status(501).json({ message: 'Duplicate workflow is not implemented yet' });
+  const data = await workflowService.duplicateWorkflow(req.params.id, req.user);
+  res.status(201).json(data);
 });
 
 const remove = asyncHandler(async (req, res) => {
-  // TODO: Delete the owned workflow and respond with 204.
-  res.status(501).json({ message: 'Delete workflow is not implemented yet' });
+  await workflowService.deleteWorkflow(req.params.id, req.user);
+  res.status(204).send();
 });
 
 const generate = asyncHandler(async (req, res) => {
-  // TODO: Generate a workflow graph from req.body.prompt and respond with 201.
-  res.status(501).json({ message: 'Workflow generation is not implemented yet' });
+  const data = await workflowService.generateWorkflowFromPrompt(req.body.prompt, req.user);
+  res.status(201).json(data);
 });
 
 const execute = asyncHandler(async (req, res) => {
-  // TODO: Load the workflow, start the execution with req.body.input, and respond with 202.
-  res.status(501).json({ message: 'Workflow execution is not implemented yet' });
+  const workflow = await workflowService.getWorkflow(req.params.id, req.user);
+  const data = await executionService.executeWorkflow(workflow, req.body.input || {});
+  res.status(202).json(data);
 });
 
 const dashboard = asyncHandler(async (req, res) => {
-  // TODO: Respond with the dashboard statistics for the current user.
-  res.status(501).json({ message: 'Dashboard statistics are not implemented yet' });
+  const data = await workflowService.dashboardStats(req.user);
+  res.status(200).json(data);
 });
 
 module.exports = { list, create, get, update, duplicate, remove, generate, execute, dashboard };

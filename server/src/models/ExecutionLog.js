@@ -1,7 +1,20 @@
 const mongoose = require('mongoose');
 
-// TODO: Define the fields: execution, workflow, nodeId, agent,
-// TODO: level ('info' | 'warning' | 'error' | 'success'), event, message, metadata.
-const ExecutionLogSchema = new mongoose.Schema({}, { timestamps: true });
+const ExecutionLogSchema = new mongoose.Schema({
+  execution: { type: mongoose.Schema.Types.ObjectId, ref: 'Execution', required: true },
+  workflow: { type: mongoose.Schema.Types.ObjectId, ref: 'Workflow', required: true },
+  nodeId: { type: String, default: null },
+  agent: { type: String, default: null },
+  level: {
+    type: String,
+    enum: ['info', 'warning', 'error', 'success'],
+    default: 'info'
+  },
+  event: { type: String, default: '' },
+  message: { type: String, required: true },
+  metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
+}, { timestamps: true });
+
+ExecutionLogSchema.index({ execution: 1, createdAt: 1 });
 
 module.exports = mongoose.model('ExecutionLog', ExecutionLogSchema);

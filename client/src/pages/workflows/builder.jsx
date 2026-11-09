@@ -11,8 +11,14 @@ export default function WorkflowBuilderPage() {
 
   const submit = async (event) => {
     event.preventDefault();
-    // TODO: Generate the workflow graph from the prompt through the store and report how
-    // TODO: many nodes were produced, or show the API error message.
+    setNotice('');
+    try {
+      const generated = await generateWorkflow(prompt);
+      const count = generated?.nodes?.length || 0;
+      setNotice(`Generated workflow "${generated?.name || 'Workflow'}" with ${count} nodes.`);
+    } catch (err) {
+      setNotice(`Generation error: ${err.response?.data?.message || err.message}`);
+    }
   };
 
   return (

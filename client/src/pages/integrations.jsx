@@ -19,33 +19,80 @@ function IntegrationsContent() {
   const [drafts, setDrafts] = useState({});
   const [message, setMessage] = useState('');
 
+  const refreshIntegrations = async () => {
+    try {
+      const res = await api.get('/integrations');
+      setItems(res.data || []);
+    } catch (err) {
+      setMessage(`Failed to load integrations: ${err.message}`);
+    }
+  };
+
   useEffect(() => {
-    // TODO: Load the saved integrations and the provider status, then read the
-    // TODO: connected / error query parameters left behind by the OAuth redirect.
+    refreshIntegrations();
+    api.get('/integrations/status').then((res) => setStatus(res.data)).catch(() => {});
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const connectedParam = params.get('connected');
+      const errorParam = params.get('error');
+      if (connectedParam) {
+        setMessage(`Successfully connected ${connectedParam}`);
+      } else if (errorParam) {
+        setMessage(`Integration error: ${errorParam}`);
+      }
+    }
   }, []);
 
   const connected = new Set(items.map((item) => item.provider));
 
-  const refreshIntegrations = async () => {
-    // TODO: Reload GET /integrations into state and report failures in the message banner.
-  };
-
   const startOAuth = async (id, name) => {
-    // TODO: Request the consent URL from /integrations/oauth/{id}/start and redirect to it.
+    try {
+      const res = await api.get(`/integrations/oauth/${id}/start`);
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      }
+    } catch (err) {
+      setMessage(`Cannot start OAuth for ${name}: ${err.response?.data?.message || err.message}`);
+    }
   };
 
   const connectProvider = async (id, name, placeholder, mode) => {
-    // TODO: Explain that env-managed and OAuth providers are not connected here, require a
-    // TODO: pasted credential for Discord, POST it to /integrations, and refresh the card.
+    if (mode === 'env') {
+      setMessage(`${name} is configured via server environment variables (.env).`);
+      return;
+    }
+    if (mode === 'oauth') {
+      await refreshIntegrations();
+      setMessage(`${name} uses OAuth authorization. Click the Connect OAuth button.`);
+      return;
+    }
+    const credential = drafts[id] || '';
+    if (!credential) {
+      setMessage(`Please provide a value for ${name} (${placeholder}).`);
+      return;
+    }
+    try {
+      await api.post('/integrations', {
+        provider: id,
+        webhookUrl: credential,
+        accessToken: credential,
+        status: 'connected'
+      });
+      setMessage(`Successfully saved credential for ${name}.`);
+      setDrafts((prev) => ({ ...prev, [id]: '' }));
+      await refreshIntegrations();
+    } catch (err) {
+      setMessage(`Failed to connect ${name}: ${err.response?.data?.message || err.message}`);
+    }
   };
 
   return (
     <AppShell title="API Integrations">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {providers.map(([id, name, description, placeholder, mode]) => {
-            const oauthManaged = mode === 'oauth';
-            const credential = drafts[id] || '';
-            return (
+          const oauthManaged = mode === 'oauth';
+          const credential = drafts[id] || '';
+          return (
             <div key={id} className="rounded border border-slate-200 bg-white p-5 shadow-soft">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
@@ -85,7 +132,8 @@ function IntegrationsContent() {
                 {mode === 'manual' ? (connected.has(id) ? 'Reconnect' : 'Connect') : 'Refresh Status'}
               </button>
             </div>
-          );})}
+          );
+        })}
       </div>
       {message && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-medium text-teal-900">

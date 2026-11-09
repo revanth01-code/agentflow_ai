@@ -10,8 +10,14 @@ const queueNames = {
 };
 
 function createQueue(name) {
-  // TODO: Return a real BullMQ Queue when a Redis connection is available and keep this
-  // TODO: in-memory fallback object otherwise.
+  const redis = getRedisConnection();
+  if (redis) {
+    try {
+      return new Queue(name, { connection: redis });
+    } catch (_err) {
+      // fallback to memory
+    }
+  }
   return {
     name,
     fallback: true,

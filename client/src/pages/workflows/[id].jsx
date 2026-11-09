@@ -12,12 +12,23 @@ function WorkflowDetailsContent() {
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    // TODO: Load the workflow and its executions once the route id is available.
+    if (id) {
+      loadWorkflow(id);
+      fetchExecutions(id);
+    }
   }, [id, loadWorkflow, fetchExecutions]);
 
   const runWorkflow = async () => {
-    // TODO: Execute the workflow, refresh the executions and timeline, and report the
-    // TODO: resulting status, the completed step count, or the failure message.
+    try {
+      setStatus('Starting workflow execution...');
+      const res = await executeWorkflow();
+      const stepCount = Object.keys(res.output || {}).length;
+      setStatus(`Execution ${res.status}: ${stepCount} node steps processed in ${res.durationMs || 0}ms.`);
+      await fetchExecutions(id);
+      if (res._id) await fetchTimeline(res._id);
+    } catch (err) {
+      setStatus(`Execution error: ${err.message}`);
+    }
   };
 
   return (
@@ -46,7 +57,7 @@ function WorkflowDetailsContent() {
               </div>
               <p className="text-xs text-slate-500">{new Date(execution.createdAt).toLocaleString()}</p>
               <p className="mt-2 text-xs font-medium text-slate-600">
-                {Object.keys(execution.output?.output || {}).length} node steps completed
+                {Object.keys(execution.output || {}).length} node steps completed
               </p>
             </button>
           ))}

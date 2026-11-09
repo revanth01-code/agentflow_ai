@@ -8,7 +8,9 @@ export default function SettingsPage() {
   const [health, setHealth] = useState(null);
 
   useEffect(() => {
-    // TODO: Load GET /health into state and fall back to an offline status on failure.
+    api.get('/health')
+      .then((res) => setHealth(res.data))
+      .catch((_err) => setHealth({ status: 'offline', error: 'Failed to reach backend API' }));
   }, []);
 
   return (

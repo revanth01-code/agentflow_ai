@@ -1,60 +1,195 @@
 const { isMemoryStore } = require('../config/db');
 const memoryStore = require('../utils/memoryStore');
 const Workflow = require('../models/Workflow');
+const Execution = require('../models/Execution');
+const ExecutionLog = require('../models/ExecutionLog');
+const Notification = require('../models/Notification');
 const ApiError = require('../utils/apiError');
 const { generateWorkflow } = require('./aiService');
 
 function normalizeEdges(edges = [], nodes = []) {
-  // TODO: Give every edge an id, resolve string/object source and target values, default
-  // TODO: animated to true, and drop edges that do not connect two known nodes.
-  return [];
+  if (!Array.isArray(edges)) return [];
+  const validNodeIds = new Set(
+    (nodes || []).map((n) => (n && n.id ? String(n.id) : '')).filter(Boolean)
+  );
+
+  return edges
+    .map((edge, index) => {
+      const source = typeof edge.source === 'object' ? edge.source?.id : edge.source;
+      const target = typeof edge.target === 'object' ? edge.target?.id : edge.target;
+      const sourceStr = String(source || '');
+      const targetStr = String(target || '');
+
+      if (!validNodeIds.has(sourceStr) || !validNodeIds.has(targetStr)) {
+        return null;
+      }
+
+      return {
+        id: edge.id || `e-${sourceStr}-${targetStr}-${index}`,
+        source: sourceStr,
+        target: targetStr,
+        label: edge.label || '',
+        animated: edge.animated !== false,
+        condition: edge.condition || ''
+      };
+    })
+    .filter(Boolean);
 }
 
-function normalizeWorkflow(payload, owner) {
-  // TODO: Build the persisted shape (name, description, owner, status, trigger, nodes,
-  // TODO: normalized edges, tags), keeping only nodes that have an id.
-  return {};
+function normalizeWorkflow(payload = {}, owner) {
+  const nodes = Array.isArray(payload.nodes)
+    ? payload.nodes
+        .filter((node) => node && node.id)
+        .map((node) => ({
+          id: String(node.id),
+          type: String(node.type || 'custom'),
+          label: String(node.label || node.data?.label || node.type || ''),
+          category: String(node.category || node.data?.category || ''),
+          position: {
+            x: Number(node.position?.x) || 0,
+            y: Number(node.position?.y) || 0
+          },
+          config: node.config || node.data?.config || {},
+          status: node.status || 'idle'
+        }))
+    : [];
+
+  const edges = normalizeEdges(payload.edges, nodes);
+
+  return {
+    name: payload.name || 'Untitled Workflow',
+    description: payload.description || '',
+    owner: owner ? (owner._id ? String(owner._id) : String(owner)) : null,
+    status: payload.status || 'draft',
+    trigger: payload.trigger || { type: 'manual', config: {} },
+    nodes,
+    edges,
+    version: Number(payload.version) || 1,
+    tags: Array.isArray(payload.tags) ? payload.tags : [],
+    lastExecutedAt: payload.lastExecutedAt || null
+  };
 }
 
 async function createWorkflow(payload, owner) {
-  // TODO: Normalize the payload and insert it into the memory store or MongoDB.
-  throw new ApiError(501, 'Create workflow service is not implemented yet');
+  const normalized = normalizeWorkflow(payload, owner);
+  if (isMemoryStore()) {
+    return memoryStore.insert('workflows', normalized);
+  }
+  return Workflow.create(normalized);
 }
 
 async function listWorkflows(owner) {
-  // TODO: Return the owner's workflows sorted by updatedAt descending.
-  throw new ApiError(501, 'List workflows service is not implemented yet');
+  const ownerId = String(owner._id || owner);
+  if (isMemoryStore()) {
+    const list = memoryStore.list('workflows', { owner: ownerId });
+    return list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }
+  return Workflow.find({ owner: ownerId }).sort({ updatedAt: -1 }).lean();
 }
 
 async function getWorkflow(id, owner) {
-  // TODO: Find the workflow by id and owner, throwing a 404 when it does not exist.
-  throw new ApiError(501, 'Get workflow service is not implemented yet');
+  const ownerId = String(owner._id || owner);
+  if (isMemoryStore()) {
+    const wf = memoryStore.findOne('workflows', { _id: String(id), owner: ownerId });
+    if (!wf) throw new ApiError(404, 'Workflow not found');
+    return wf;
+  }
+  const wf = await Workflow.findOne({ _id: id, owner: ownerId }).lean();
+  if (!wf) throw new ApiError(404, 'Workflow not found');
+  return wf;
 }
 
 async function updateWorkflow(id, owner, payload) {
-  // TODO: Verify ownership, normalize the payload, and save the updated workflow.
-  throw new ApiError(501, 'Update workflow service is not implemented yet');
+  const ownerId = String(owner._id || owner);
+  const normalized = normalizeWorkflow(payload, ownerId);
+
+  if (isMemoryStore()) {
+    const existing = memoryStore.findOne('workflows', { _id: String(id), owner: ownerId });
+    if (!existing) throw new ApiError(404, 'Workflow not found');
+    const updated = memoryStore.update('workflows', String(id), normalized);
+    return updated;
+  }
+
+  const updated = await Workflow.findOneAndUpdate(
+    { _id: id, owner: ownerId },
+    normalized,
+    { new: true, runValidators: true }
+  ).lean();
+  if (!updated) throw new ApiError(404, 'Workflow not found');
+  return updated;
 }
 
 async function duplicateWorkflow(id, owner) {
-  // TODO: Copy the workflow as a new draft named "<name> Copy" with version 1.
-  throw new ApiError(501, 'Duplicate workflow service is not implemented yet');
+  const original = await getWorkflow(id, owner);
+  const copyData = {
+    ...original,
+    name: `${original.name} Copy`,
+    status: 'draft',
+    version: 1
+  };
+  delete copyData._id;
+  delete copyData.createdAt;
+  delete copyData.updatedAt;
+  return createWorkflow(copyData, owner);
 }
 
 async function deleteWorkflow(id, owner) {
-  // TODO: Verify ownership and delete the workflow.
-  throw new ApiError(501, 'Delete workflow service is not implemented yet');
+  const ownerId = String(owner._id || owner);
+  if (isMemoryStore()) {
+    const deleted = memoryStore.remove('workflows', String(id));
+    if (!deleted) throw new ApiError(404, 'Workflow not found');
+    return true;
+  }
+  const deleted = await Workflow.findOneAndDelete({ _id: id, owner: ownerId });
+  if (!deleted) throw new ApiError(404, 'Workflow not found');
+  return true;
 }
 
 async function generateWorkflowFromPrompt(prompt, owner) {
-  // TODO: Build the graph with the AI service and persist it as a new workflow.
-  throw new ApiError(501, 'Workflow generation service is not implemented yet');
+  const graph = await generateWorkflow(prompt);
+  return createWorkflow(graph, owner);
 }
 
 async function dashboardStats(owner) {
-  // TODO: Aggregate the workflow totals, recent executions, notifications, and the
-  // TODO: completed / failed / running analytics for the dashboard.
-  throw new ApiError(501, 'Dashboard statistics service is not implemented yet');
+  const ownerId = String(owner._id || owner);
+  if (isMemoryStore()) {
+    const workflows = memoryStore.list('workflows', { owner: ownerId });
+    const allExecutions = memoryStore.list('executions');
+    const wfIds = new Set(workflows.map((w) => String(w._id)));
+    const executions = allExecutions.filter((e) => wfIds.has(String(e.workflow)));
+    const failedWorkflows = executions.filter((e) => e.status === 'FAILED').length;
+    const aiLogs = memoryStore.list('executionLogs');
+
+    return {
+      totalWorkflows: workflows.length,
+      activeWorkflows: workflows.filter((w) => w.status === 'active').length,
+      failedWorkflows,
+      aiReasoningActivity: aiLogs.length,
+      recentExecutions: executions.slice(0, 6)
+    };
+  }
+
+  const workflows = await Workflow.find({ owner: ownerId }).lean();
+  const wfIds = workflows.map((w) => w._id);
+  const executions = await Execution.find({ workflow: { $in: wfIds } })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
+  const failedCount = await Execution.countDocuments({
+    workflow: { $in: wfIds },
+    status: 'FAILED'
+  });
+  const aiLogCount = await ExecutionLog.countDocuments({
+    workflow: { $in: wfIds }
+  });
+
+  return {
+    totalWorkflows: workflows.length,
+    activeWorkflows: workflows.filter((w) => w.status === 'active').length,
+    failedWorkflows: failedCount,
+    aiReasoningActivity: aiLogCount,
+    recentExecutions: executions.slice(0, 6)
+  };
 }
 
 module.exports = {
@@ -65,5 +200,7 @@ module.exports = {
   duplicateWorkflow,
   deleteWorkflow,
   generateWorkflowFromPrompt,
-  dashboardStats
+  dashboardStats,
+  normalizeEdges,
+  normalizeWorkflow
 };
