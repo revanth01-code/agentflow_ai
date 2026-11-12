@@ -19,6 +19,19 @@ function extractEmail(prompt = '') {
   return match ? match[0] : '';
 }
 
+function isPlaceholderEmail(value = '') {
+  return /@(example\.com|test\.com|workspace\.local)$/i.test(String(value).trim());
+}
+
+function requestedEmail(prompt = '', userEmail = '') {
+  const extracted = extractEmail(prompt);
+  if (extracted && !isPlaceholderEmail(extracted)) return extracted;
+  if (/\bmy email\b|\bmy address\b/i.test(prompt) && userEmail && !isPlaceholderEmail(userEmail)) {
+    return userEmail;
+  }
+  return '';
+}
+
 function extractMessageBody(prompt = '', fallback = 'Automated message from Agentflow AI') {
   const text = String(prompt).trim();
   const explicit = text.match(/\b(?:saying|say|message|body|content)\s*(?:is|:|=)?\s*["']([\s\S]*?)["']/i);
@@ -43,8 +56,8 @@ function isEmailAutomationPrompt(prompt = '') {
   return /(send|email|mail|gmail|message)/i.test(prompt);
 }
 
-function buildEmailWorkflow(prompt = '') {
-  const recipient = extractEmail(prompt) || 'recipient@example.com';
+function buildEmailWorkflow(prompt = '', userEmail = '') {
+  const recipient = requestedEmail(prompt, userEmail);
   const subject = extractSubject(prompt);
   const nodes = [
     {
@@ -88,7 +101,7 @@ function buildEmailWorkflow(prompt = '') {
   };
 }
 
-function buildFallbackWorkflow(prompt = '') {
+function buildFallbackWorkflow(prompt = '', userEmail = '') {
   const promptLower = String(prompt).toLowerCase();
   let triggerType = 'manual-trigger';
   let triggerLabel = 'Manual Trigger';
@@ -142,7 +155,7 @@ function buildFallbackWorkflow(prompt = '') {
       category: 'actions',
       position: { x: 680, y: 150 },
       config: {
-        to: extractEmail(prompt) || 'team@example.com',
+        to: requestedEmail(prompt, userEmail),
         subject: extractSubject(prompt),
         body: extractMessageBody(prompt),
         message: extractMessageBody(prompt)
@@ -213,7 +226,7 @@ function extractJson(text = '') {
   return null;
 }
 
-function sanitizeGeneratedWorkflow(graph, prompt = '') {
+function sanitizeGeneratedWorkflow(graph, prompt = '', userEmail = '') {
   if (!graph || !Array.isArray(graph.nodes)) return null;
 
   const validNodes = [];
@@ -237,9 +250,9 @@ function sanitizeGeneratedWorkflow(graph, prompt = '') {
 
     const config = node.config && typeof node.config === 'object' ? { ...node.config } : {};
     if (node.type === 'send-email') {
-      const extractedEmail = extractEmail(prompt);
+      const extractedEmail = requestedEmail(prompt, userEmail);
       const extractedBody = extractMessageBody(prompt);
-      if (extractedEmail && (!config.to || config.to === prompt)) config.to = extractedEmail;
+      config.to = extractedEmail;
       if (!config.subject || config.subject === prompt) config.subject = extractSubject(prompt);
       if (!config.body || config.body === prompt || config.body === config.message) {
         config.body = extractedBody;
@@ -297,12 +310,13 @@ async function getAiProviderKeys(owner) {
   if (!user) throw new ApiError(404, 'User not found');
 
   return {
+    email: user.email,
     geminiApiKey: decrypt(user.geminiApiKey || ''),
     openrouterApiKey: decrypt(user.openrouterApiKey || '')
   };
 }
 
-async function generateWithOpenRouter(prompt, apiKey) {
+async function generateWithOpenRouter(prompt, apiKey, userEmail) {
   if (!apiKey) return null;
   try {
     const response = await axios.post(
@@ -315,6 +329,7 @@ async function generateWithOpenRouter(prompt, apiKey) {
             content: `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.
 
 For send-email nodes, extract fields from the user's request rather than copying the raw request:
+- The current user's email is "${userEmail || '(not available)'}". If the user says "send to my email" or "send to my address", use that exact address.
 - config.to must contain only the email address requested by the user.
 - config.subject must be a relevant subject, or "Agentflow Notification" when no subject is specified.
 - config.body must contain only the core message to send. For example, for "Send an email to someone@example.com saying 'Agentflow test successful!'", set config.body to "Agentflow test successful!" and never to the full prompt.
@@ -339,7 +354,7 @@ Use config.body (not config.message) for email content.`
   }
 }
 
-async function generateWithGemini(prompt, apiKey) {
+async function generateWithGemini(prompt, apiKey, userEmail) {
   if (!apiKey) return null;
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -347,6 +362,7 @@ async function generateWithGemini(prompt, apiKey) {
     const promptText = `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.
 
 For send-email nodes, extract fields from the user's request rather than copying the raw request:
+- The current user's email is "${userEmail || '(not available)'}". If the user says "send to my email" or "send to my address", use that exact address.
 - config.to must contain only the requested email address.
 - config.subject must be a relevant subject, or "Agentflow Notification" when none is specified.
 - config.body must contain only the core message to send. For example, for "Send an email to someone@example.com saying 'Agentflow test successful!'", set config.body to "Agentflow test successful!" and never to the full prompt.
@@ -369,18 +385,18 @@ async function generateWorkflow(prompt, owner) {
     });
   }
 
-  let graph = await generateWithOpenRouter(prompt, keys.openrouterApiKey);
+  let graph = await generateWithOpenRouter(prompt, keys.openrouterApiKey, keys.email);
   if (!hasUsableNodes(graph)) {
-    graph = await generateWithGemini(prompt, keys.geminiApiKey);
+    graph = await generateWithGemini(prompt, keys.geminiApiKey, keys.email);
   }
   if (hasUsableNodes(graph)) {
-    const sanitized = sanitizeGeneratedWorkflow(graph, prompt);
+    const sanitized = sanitizeGeneratedWorkflow(graph, prompt, keys.email);
     if (sanitized) return sanitized;
   }
   if (isEmailAutomationPrompt(prompt)) {
-    return buildEmailWorkflow(prompt);
+    return buildEmailWorkflow(prompt, keys.email);
   }
-  return buildFallbackWorkflow(prompt);
+  return buildFallbackWorkflow(prompt, keys.email);
 }
 
 async function runAiTask(prompt, owner) {

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Activity, Blocks, Cable, LayoutDashboard, LogOut, ScrollText, Settings, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import WelcomeModal from './WelcomeModal';
 
 const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
@@ -70,6 +71,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
         </header>
         <div className="p-4 lg:p-8">{children}</div>
       </main>
+      <WelcomeModal user={user} />
     </div>
   );
 }
