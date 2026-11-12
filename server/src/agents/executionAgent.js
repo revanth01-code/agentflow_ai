@@ -5,28 +5,12 @@ const googleSheets = require('../integrations/googleSheets');
 const slack = require('../integrations/slack');
 const discord = require('../integrations/discord');
 const { runAiTask } = require('../services/aiService');
-const { isMemoryStore } = require('../config/db');
-const memoryStore = require('../utils/memoryStore');
-const User = require('../models/User');
 
 function ownerId(workflow) {
   if (!workflow) return '';
   if (workflow.owner?._id) return String(workflow.owner._id);
   if (workflow.owner) return String(workflow.owner);
   return '';
-}
-
-async function ownerEmail(workflow) {
-  if (workflow?.owner?.email) return workflow.owner.email;
-  const id = ownerId(workflow);
-  if (!id) return '';
-
-  if (isMemoryStore()) {
-    const user = memoryStore.findOne('users', { _id: id });
-    return user?.email || '';
-  }
-  const user = await User.findById(id).lean();
-  return user?.email || '';
 }
 
 function configValue(config = {}, keys = [], fallback = '') {
@@ -36,10 +20,6 @@ function configValue(config = {}, keys = [], fallback = '') {
     }
   }
   return fallback;
-}
-
-function isPlaceholderEmail(value = '') {
-  return /@(example\.com|test\.com)$/i.test(String(value).trim());
 }
 
 function template(value, context = {}) {
@@ -88,11 +68,12 @@ async function runRealAction({ node, workflow, context }) {
       }
 
       case 'send-email': {
-        let to = template(configValue(cfg, ['to', 'recipient'], ''), context);
-        if (!to || isPlaceholderEmail(to)) {
-          to = await ownerEmail(workflow);
+        const to = template(configValue(cfg, ['to'], ''), context);
+        if (!to) {
+          const error = new Error('Recipient email is required in the send-email node configuration.');
+          error.code = 'MISSING_FIELDS';
+          throw error;
         }
-        if (!to || isPlaceholderEmail(to)) return null;
 
         const subject = template(configValue(cfg, ['subject'], 'AI Operations Automated Message'), context);
         const body = template(configValue(cfg, ['body', 'message'], 'Workflow step completed.'), context);
@@ -143,9 +124,11 @@ async function runRealAction({ node, workflow, context }) {
     }
   } catch (err) {
     if (
+      ['gmail-trigger', 'send-email', 'send-slack-message', 'send-discord-message', 'google-sheets-row'].includes(node.type) ||
       err.code === 'INTEGRATION_NOT_CONNECTED' ||
       err.code === 'MISSING_CREDENTIAL' ||
       err.code === 'MISSING_API_KEY' ||
+      err.code === 'MISSING_FIELDS' ||
       err.code === 'AUTH_EXPIRED' ||
       String(err.message || '').includes('INTEGRATION_NOT_CONNECTED')
     ) {
