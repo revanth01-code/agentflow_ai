@@ -5,6 +5,7 @@ const env = require('../config/env');
 const memoryStore = require('../utils/memoryStore');
 const Integration = require('../models/Integration');
 const { decrypt, encrypt } = require('../utils/crypto');
+const ApiError = require('../utils/apiError');
 
 const googleOAuth = {
   gmail: {
@@ -19,6 +20,26 @@ const googleOAuth = {
 };
 
 const slackScopes = ['chat:write', 'channels:read', 'groups:read'];
+const discordScopes = ['identify'];
+
+function configurationError(provider, missing) {
+  return new ApiError(
+    503,
+    `OAuth is not configured for ${provider}. Missing server environment variable(s): ${missing.join(', ')}`,
+    { code: 'INTEGRATION_CONFIG_MISSING', provider, missing }
+  );
+}
+
+function redirectUri(provider) {
+  const configured = {
+    gmail: env.googleRedirectUri,
+    'google-sheets': env.googleSheetsRedirectUri,
+    slack: env.slackRedirectUri,
+    discord: env.discordRedirectUri
+  }[provider];
+
+  return configured;
+}
 
 function safeIntegration(integration) {
   if (!integration) return null;
@@ -114,7 +135,10 @@ async function refreshGoogleAccessToken(owner, provider, refreshToken) {
 async function getProviderSecret(owner, provider) {
   const integration = await getIntegration(owner, provider);
   if (!integration || integration.status !== 'connected') {
-    throw new Error(`INTEGRATION_NOT_CONNECTED: Provider ${provider} is not connected.`);
+    throw new ApiError(400, `Provider ${provider} is not connected.`, {
+      code: 'INTEGRATION_NOT_CONNECTED',
+      provider
+    });
   }
 
   if (provider === 'gmail' || provider === 'google-sheets') {
@@ -126,14 +150,17 @@ async function getProviderSecret(owner, provider) {
   }
 
   if (!integration.encryptedAccessToken) {
-    throw new Error(`MISSING_CREDENTIAL: No token configured for ${provider}.`);
+    throw new ApiError(400, `No credential is configured for ${provider}.`, {
+      code: 'MISSING_CREDENTIAL',
+      provider
+    });
   }
 
   return decrypt(integration.encryptedAccessToken);
 }
 
 function callbackUrl(provider) {
-  return `${env.apiBaseUrl}/api/integrations/oauth/${provider}/callback`;
+  return redirectUri(provider);
 }
 
 function oauthState(owner, provider) {
@@ -158,8 +185,12 @@ async function startOAuth(owner, provider) {
   const redirectUri = callbackUrl(provider);
 
   if (provider === 'gmail' || provider === 'google-sheets') {
-    if (!env.googleClientId) {
-      throw new Error('Google Client ID is not configured in server environment');
+    const missing = [];
+    if (!env.googleClientId) missing.push('GOOGLE_CLIENT_ID');
+    if (!env.googleClientSecret) missing.push('GOOGLE_CLIENT_SECRET');
+    if (!redirectUri) missing.push(provider === 'gmail' ? 'GOOGLE_REDIRECT_URI' : 'GOOGLE_SHEETS_REDIRECT_URI');
+    if (missing.length) {
+      throw configurationError(provider, missing);
     }
     const scopes = googleOAuth[provider]?.scopes || [];
     const params = new URLSearchParams({
@@ -175,8 +206,12 @@ async function startOAuth(owner, provider) {
   }
 
   if (provider === 'slack') {
-    if (!env.slackClientId) {
-      throw new Error('Slack Client ID is not configured in server environment');
+    const missing = [];
+    if (!env.slackClientId) missing.push('SLACK_CLIENT_ID');
+    if (!env.slackClientSecret) missing.push('SLACK_CLIENT_SECRET');
+    if (!redirectUri) missing.push('SLACK_REDIRECT_URI');
+    if (missing.length) {
+      throw configurationError(provider, missing);
     }
     const params = new URLSearchParams({
       client_id: env.slackClientId,
@@ -185,6 +220,24 @@ async function startOAuth(owner, provider) {
       state
     });
     return `https://slack.com/oauth/v2/authorize?${params.toString()}`;
+  }
+
+  if (provider === 'discord') {
+    const missing = [];
+    if (!env.discordClientId) missing.push('DISCORD_CLIENT_ID');
+    if (!env.discordClientSecret) missing.push('DISCORD_CLIENT_SECRET');
+    if (!redirectUri) missing.push('DISCORD_REDIRECT_URI');
+    if (missing.length) {
+      throw configurationError(provider, missing);
+    }
+    const params = new URLSearchParams({
+      client_id: env.discordClientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: discordScopes.join(' '),
+      state
+    });
+    return `https://discord.com/oauth2/authorize?${params.toString()}`;
   }
 
   throw new Error(`OAuth not supported for provider: ${provider}`);
@@ -254,6 +307,32 @@ async function completeOAuth(provider, query = {}) {
       return `${env.clientUrl}/integrations?connected=slack`;
     }
 
+    if (provider === 'discord') {
+      const tokenRes = await axios.post(
+        'https://discord.com/api/oauth2/token',
+        new URLSearchParams({
+          client_id: env.discordClientId,
+          client_secret: env.discordClientSecret,
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri
+        }).toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      );
+
+      const { access_token: accessToken, refresh_token: refreshToken, expires_in: expiresIn, scope } = tokenRes.data;
+      await upsertIntegration(owner, {
+        provider,
+        accessToken,
+        refreshToken,
+        expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : null,
+        scopes: scope ? scope.split(' ') : discordScopes,
+        status: 'connected'
+      });
+
+      return `${env.clientUrl}/integrations?connected=discord`;
+    }
+
     return `${env.clientUrl}/integrations?error=${encodeURIComponent('Unsupported provider')}`;
   } catch (err) {
     return `${env.clientUrl}/integrations?error=${encodeURIComponent(err.message)}`;
@@ -262,12 +341,18 @@ async function completeOAuth(provider, query = {}) {
 
 function oauthStatus() {
   return {
-    gmail: env.googleClientId ? 'oauth-ready' : 'not-configured',
-    'google-sheets': env.googleClientId ? 'oauth-ready' : 'not-configured',
-    slack: env.slackClientId ? 'oauth-ready' : 'not-configured',
-    discord: 'webhook-ready',
-    gemini: env.geminiApiKey ? 'api-key' : 'not-configured',
-    openrouter: env.openRouterApiKey ? 'api-key' : 'not-configured'
+    gmail: env.googleClientId && env.googleClientSecret && env.googleRedirectUri ? 'oauth-ready' : 'not-configured',
+    'google-sheets':
+      env.googleClientId && env.googleClientSecret && env.googleSheetsRedirectUri ? 'oauth-ready' : 'not-configured',
+    slack: env.slackClientId && env.slackClientSecret && env.slackRedirectUri ? 'oauth-ready' : 'not-configured',
+    discord:
+      env.discordClientId && env.discordClientSecret && env.discordRedirectUri
+        ? 'oauth-ready'
+        : env.discordBotToken
+          ? 'webhook-ready'
+          : 'not-configured',
+    gemini: 'user-managed',
+    openrouter: 'user-managed'
   };
 }
 

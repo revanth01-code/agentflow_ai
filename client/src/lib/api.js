@@ -4,7 +4,8 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 20000
+  timeout: 20000,
+  withCredentials: true
 });
 
 api.interceptors.request.use((config) => {

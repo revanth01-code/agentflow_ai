@@ -24,8 +24,8 @@ const health = asyncHandler(async (_req, res) => {
       names: queueNames
     },
     aiProviders: {
-      openRouter: Boolean(env.openRouterApiKey),
-      gemini: Boolean(env.geminiApiKey)
+      openRouter: 'user-managed',
+      gemini: 'user-managed'
     },
     langGraph: getLangGraphStatus()
   });

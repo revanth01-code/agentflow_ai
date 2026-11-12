@@ -8,7 +8,7 @@ const providers = [
   ['gmail', 'Gmail API', 'Connect Google OAuth for real email send/read actions', 'Access token', 'oauth'],
   ['slack', 'Slack API', 'Connect Slack OAuth for real channel messages', 'Bot token', 'oauth'],
   ['google-sheets', 'Google Sheets API', 'Connect Google OAuth for real spreadsheet row appends', 'Access token', 'oauth'],
-  ['discord', 'Discord API', 'Paste a Discord webhook URL for real notifications', 'Webhook URL', 'manual'],
+  ['discord', 'Discord API', 'Connect Discord OAuth for account access', 'OAuth access', 'oauth'],
   ['openrouter', 'OpenRouter API', 'Configured from server environment variables', 'Managed in .env', 'env'],
   ['gemini', 'Gemini API', 'Configured from server environment variables', 'Managed in .env', 'env']
 ];

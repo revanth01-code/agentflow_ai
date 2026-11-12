@@ -5,6 +5,7 @@ const { isMemoryStore } = require('../config/db');
 const memoryStore = require('../utils/memoryStore');
 const ApiError = require('../utils/apiError');
 const User = require('../models/User');
+const { encrypt } = require('../utils/crypto');
 
 function signToken(user) {
   const userId = user._id ? String(user._id) : user.id;
@@ -19,6 +20,8 @@ function sanitizeUser(user) {
   if (!user) return null;
   const obj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
   delete obj.password;
+  delete obj.geminiApiKey;
+  delete obj.openrouterApiKey;
   delete obj.__v;
   if (obj._id) {
     obj._id = String(obj._id);
@@ -109,4 +112,33 @@ async function login({ email, password }) {
   return { user: sanitized, token };
 }
 
-module.exports = { register, login, sanitizeUser, signToken };
+async function updateAiKeys(owner, { geminiApiKey, openrouterApiKey }) {
+  const ownerId = String(owner._id || owner);
+  const updates = {};
+  if (geminiApiKey !== undefined) updates.geminiApiKey = String(geminiApiKey);
+  if (openrouterApiKey !== undefined) updates.openrouterApiKey = String(openrouterApiKey);
+
+  if (isMemoryStore()) {
+    const updated = memoryStore.update('users', ownerId, Object.fromEntries(
+      Object.entries(updates).map(([field, value]) => [field, value ? encrypt(value) : ''])
+    ));
+    if (!updated) throw new ApiError(404, 'User not found');
+    return {
+      geminiConfigured: Boolean(updated.geminiApiKey),
+      openrouterConfigured: Boolean(updated.openrouterApiKey)
+    };
+  } else {
+    const user = await User.findById(ownerId).select('+geminiApiKey +openrouterApiKey');
+    if (!user) throw new ApiError(404, 'User not found');
+    for (const [field, value] of Object.entries(updates)) {
+      user[field] = value;
+    }
+    await user.save();
+    return {
+      geminiConfigured: Boolean(user.geminiApiKey),
+      openrouterConfigured: Boolean(user.openrouterApiKey)
+    };
+  }
+}
+
+module.exports = { register, login, updateAiKeys, sanitizeUser, signToken };

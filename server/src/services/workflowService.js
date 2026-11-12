@@ -146,7 +146,7 @@ async function deleteWorkflow(id, owner) {
 }
 
 async function generateWorkflowFromPrompt(prompt, owner) {
-  const graph = await generateWorkflow(prompt);
+  const graph = await generateWorkflow(prompt, owner);
   return createWorkflow(graph, owner);
 }
 

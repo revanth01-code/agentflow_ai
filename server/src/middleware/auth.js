@@ -8,11 +8,13 @@ const { sanitizeUser } = require('../services/authService');
 
 async function auth(req, _res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return next(new ApiError(401, 'Authentication token required'));
-  }
+  const cookieToken = req.headers.cookie
+    ?.split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith('agentflow_token='))
+    ?.slice('agentflow_token='.length);
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : cookieToken;
 
-  const token = authHeader.split(' ')[1];
   if (!token) {
     return next(new ApiError(401, 'Authentication token required'));
   }

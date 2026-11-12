@@ -18,5 +18,9 @@ router.post('/login', [
 ], validate, controller.login);
 
 router.get('/me', auth, controller.me);
+router.put('/ai-keys', auth, [
+  body('geminiApiKey').optional().isString(),
+  body('openrouterApiKey').optional().isString()
+], validate, controller.updateAiKeys);
 
 module.exports = router;

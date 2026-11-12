@@ -1,6 +1,11 @@
 const axios = require('axios');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const env = require('../config/env');
+const { decrypt } = require('../utils/crypto');
+const { isMemoryStore } = require('../config/db');
+const memoryStore = require('../utils/memoryStore');
+const User = require('../models/User');
+const ApiError = require('../utils/apiError');
 
 const nodeCatalog = {
   triggers: ['gmail-trigger', 'webhook-trigger', 'schedule-trigger', 'manual-trigger', 'slack-trigger'],
@@ -264,8 +269,22 @@ function sanitizeGeneratedWorkflow(graph, prompt = '') {
   };
 }
 
-async function generateWithOpenRouter(prompt) {
-  if (!env.openRouterApiKey) return null;
+async function getAiProviderKeys(owner) {
+  const ownerId = String(owner?._id || owner || '');
+  const user = isMemoryStore()
+    ? memoryStore.findOne('users', { _id: ownerId })
+    : await User.findById(ownerId).select('+geminiApiKey +openrouterApiKey').lean();
+
+  if (!user) throw new ApiError(404, 'User not found');
+
+  return {
+    geminiApiKey: decrypt(user.geminiApiKey || ''),
+    openrouterApiKey: decrypt(user.openrouterApiKey || '')
+  };
+}
+
+async function generateWithOpenRouter(prompt, apiKey) {
+  if (!apiKey) return null;
   try {
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -282,7 +301,7 @@ async function generateWithOpenRouter(prompt) {
       },
       {
         headers: {
-          Authorization: `Bearer ${env.openRouterApiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         timeout: 25000
@@ -295,10 +314,10 @@ async function generateWithOpenRouter(prompt) {
   }
 }
 
-async function generateWithGemini(prompt) {
-  if (!env.geminiApiKey) return null;
+async function generateWithGemini(prompt, apiKey) {
+  if (!apiKey) return null;
   try {
-    const genAI = new GoogleGenerativeAI(env.geminiApiKey);
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: env.geminiModel || 'gemini-1.5-flash' });
     const promptText = `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}. User request: ${prompt}`;
     const result = await model.generateContent(promptText);
@@ -309,10 +328,17 @@ async function generateWithGemini(prompt) {
   }
 }
 
-async function generateWorkflow(prompt) {
-  let graph = await generateWithOpenRouter(prompt);
+async function generateWorkflow(prompt, owner) {
+  const keys = await getAiProviderKeys(owner);
+  if (!keys.openrouterApiKey && !keys.geminiApiKey) {
+    throw new ApiError(400, 'Provide a Gemini or OpenRouter API key in Settings before generating workflows.', {
+      code: 'MISSING_API_KEY'
+    });
+  }
+
+  let graph = await generateWithOpenRouter(prompt, keys.openrouterApiKey);
   if (!hasUsableNodes(graph)) {
-    graph = await generateWithGemini(prompt);
+    graph = await generateWithGemini(prompt, keys.geminiApiKey);
   }
   if (hasUsableNodes(graph)) {
     const sanitized = sanitizeGeneratedWorkflow(graph, prompt);
@@ -324,4 +350,34 @@ async function generateWorkflow(prompt) {
   return buildFallbackWorkflow(prompt);
 }
 
-module.exports = { generateWorkflow, nodeCatalog };
+async function runAiTask(prompt, owner) {
+  const keys = await getAiProviderKeys(owner);
+  if (!keys.openrouterApiKey && !keys.geminiApiKey) {
+    throw new ApiError(400, 'Provide a Gemini or OpenRouter API key in Settings before running AI nodes.', {
+      code: 'MISSING_API_KEY'
+    });
+  }
+
+  if (keys.openrouterApiKey) {
+    const response = await axios.post(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        model: env.openRouterModel || 'anthropic/claude-3.5-sonnet',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.2
+      },
+      {
+        headers: { Authorization: `Bearer ${keys.openrouterApiKey}` },
+        timeout: 25000
+      }
+    );
+    return response.data?.choices?.[0]?.message?.content || '';
+  }
+
+  const genAI = new GoogleGenerativeAI(keys.geminiApiKey);
+  const model = genAI.getGenerativeModel({ model: env.geminiModel || 'gemini-1.5-flash' });
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
+module.exports = { generateWorkflow, getAiProviderKeys, runAiTask, nodeCatalog };

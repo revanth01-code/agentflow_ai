@@ -4,6 +4,7 @@ const gmail = require('../integrations/gmail');
 const googleSheets = require('../integrations/googleSheets');
 const slack = require('../integrations/slack');
 const discord = require('../integrations/discord');
+const { runAiTask } = require('../services/aiService');
 const { isMemoryStore } = require('../config/db');
 const memoryStore = require('../utils/memoryStore');
 const User = require('../models/User');
@@ -72,6 +73,14 @@ async function runRealAction({ node, workflow, context }) {
   const cfg = node.config || {};
 
   try {
+    if (node.type.startsWith('ai-')) {
+      const prompt = template(
+        configValue(cfg, ['prompt', 'message'], `Process this workflow data using ${node.type}.`),
+        context
+      );
+      return { result: await runAiTask(prompt, owner) };
+    }
+
     switch (node.type) {
       case 'gmail-trigger': {
         const token = await integrationService.getProviderSecret(owner, 'gmail');
@@ -133,6 +142,15 @@ async function runRealAction({ node, workflow, context }) {
         return null;
     }
   } catch (err) {
+    if (
+      err.code === 'INTEGRATION_NOT_CONNECTED' ||
+      err.code === 'MISSING_CREDENTIAL' ||
+      err.code === 'MISSING_API_KEY' ||
+      err.code === 'AUTH_EXPIRED' ||
+      String(err.message || '').includes('INTEGRATION_NOT_CONNECTED')
+    ) {
+      throw err;
+    }
     // Return null so simulated/fallback execution continues gracefully if credentials are not hooked up
     return null;
   }

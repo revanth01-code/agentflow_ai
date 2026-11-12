@@ -6,12 +6,30 @@ import api from '../lib/api';
 
 export default function SettingsPage() {
   const [health, setHealth] = useState(null);
+  const [aiKeys, setAiKeys] = useState({ geminiApiKey: '', openrouterApiKey: '' });
+  const [keyMessage, setKeyMessage] = useState('');
+  const [savingKeys, setSavingKeys] = useState(false);
 
   useEffect(() => {
     api.get('/health')
       .then((res) => setHealth(res.data))
       .catch((_err) => setHealth({ status: 'offline', error: 'Failed to reach backend API' }));
   }, []);
+
+  const saveAiKeys = async (event) => {
+    event.preventDefault();
+    setSavingKeys(true);
+    setKeyMessage('');
+    try {
+      await api.put('/auth/ai-keys', aiKeys);
+      setAiKeys({ geminiApiKey: '', openrouterApiKey: '' });
+      setKeyMessage('AI provider keys saved securely.');
+    } catch (err) {
+      setKeyMessage(err.response?.data?.message || 'Failed to save AI provider keys.');
+    } finally {
+      setSavingKeys(false);
+    }
+  };
 
   return (
     <ProtectedRoute>
@@ -34,6 +52,44 @@ export default function SettingsPage() {
             <pre className="overflow-auto rounded bg-slate-950 p-4 text-xs text-slate-100">
               {JSON.stringify(health, null, 2)}
             </pre>
+          </section>
+          <section className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+            <h2 className="mb-2 text-base font-semibold text-slate-950">AI Provider Settings</h2>
+            <p className="mb-4 text-sm text-slate-600">
+              Add your own provider keys. Keys are encrypted before they are stored and are never displayed again.
+            </p>
+            <form onSubmit={saveAiKeys} className="space-y-3">
+              <label className="block text-sm font-medium text-slate-700">
+                Gemini API key
+                <input
+                  type="password"
+                  value={aiKeys.geminiApiKey}
+                  onChange={(event) => setAiKeys((current) => ({ ...current, geminiApiKey: event.target.value }))}
+                  autoComplete="new-password"
+                  placeholder="Leave blank to clear"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                OpenRouter API key
+                <input
+                  type="password"
+                  value={aiKeys.openrouterApiKey}
+                  onChange={(event) => setAiKeys((current) => ({ ...current, openrouterApiKey: event.target.value }))}
+                  autoComplete="new-password"
+                  placeholder="Leave blank to clear"
+                  className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={savingKeys}
+                className="rounded bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingKeys ? 'Saving...' : 'Save Keys'}
+              </button>
+              {keyMessage && <p className="text-sm text-slate-600">{keyMessage}</p>}
+            </form>
           </section>
         </div>
       </AppShell>
