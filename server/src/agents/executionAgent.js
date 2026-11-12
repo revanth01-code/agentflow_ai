@@ -27,15 +27,33 @@ function template(value, context = {}) {
   return value.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, path) => {
     const parts = path.split('.');
     let current = context;
-    for (const part of parts) {
+    let startIndex = 0;
+    if (parts.length >= 2 && parts[1] === 'output' && context.outputs?.[parts[0]] !== undefined) {
+      current = context.outputs[parts[0]];
+      startIndex = 2;
+    }
+    for (let index = startIndex; index < parts.length; index += 1) {
+      const part = parts[index];
       if (current && typeof current === 'object' && part in current) {
         current = current[part];
       } else {
         return '';
       }
     }
-    return current !== undefined && current !== null ? String(current) : '';
+    if (current === undefined || current === null) return '';
+    return typeof current === 'object' ? JSON.stringify(current) : String(current);
   });
+}
+
+function resolveTemplates(value, context = {}) {
+  if (typeof value === 'string') return template(value, context);
+  if (Array.isArray(value)) return value.map((item) => resolveTemplates(item, context));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, resolveTemplates(item, context)])
+    );
+  }
+  return value;
 }
 
 function completed(node, data) {
@@ -50,15 +68,12 @@ function completed(node, data) {
 async function runRealAction({ node, workflow, context }) {
   if (node.status === 'disabled') return null;
   const owner = ownerId(workflow);
-  const cfg = node.config || {};
+  const cfg = resolveTemplates(node.config || {}, context);
 
   try {
     if (node.type.startsWith('ai-')) {
-      const prompt = template(
-        configValue(cfg, ['prompt', 'message'], `Process this workflow data using ${node.type}.`),
-        context
-      );
-      return { result: await runAiTask(prompt, owner) };
+      const prompt = configValue(cfg, ['prompt', 'message'], `Process this workflow data using ${node.type}.`);
+      return await runAiTask(prompt, owner);
     }
 
     switch (node.type) {
@@ -68,45 +83,45 @@ async function runRealAction({ node, workflow, context }) {
       }
 
       case 'send-email': {
-        const to = template(configValue(cfg, ['to'], ''), context);
+        const to = configValue(cfg, ['to'], '');
         if (!to) {
           const error = new Error('Recipient email is required in the send-email node configuration.');
           error.code = 'MISSING_FIELDS';
           throw error;
         }
 
-        const subject = template(configValue(cfg, ['subject'], 'AI Operations Automated Message'), context);
-        const body = template(configValue(cfg, ['body', 'message'], 'Workflow step completed.'), context);
+        const subject = configValue(cfg, ['subject'], 'AI Operations Automated Message');
+        const body = configValue(cfg, ['body', 'message'], 'Workflow step completed.');
 
         const token = await integrationService.getProviderSecret(owner, 'gmail');
         return await gmail.sendEmail(token, { to, subject, body });
       }
 
       case 'send-slack-message': {
-        const channel = template(configValue(cfg, ['channel'], '#general'), context);
-        const text = template(configValue(cfg, ['text', 'message'], 'AgentFlow notification'), context);
+        const channel = configValue(cfg, ['channel'], '#general');
+        const text = configValue(cfg, ['text', 'message'], 'AgentFlow notification');
         const token = await integrationService.getProviderSecret(owner, 'slack');
         return await slack.sendSlackMessage(token, channel, text);
       }
 
       case 'google-sheets-row': {
-        const spreadsheetId = template(configValue(cfg, ['spreadsheetId'], ''), context);
+        const spreadsheetId = configValue(cfg, ['spreadsheetId'], '');
         if (!spreadsheetId) return null;
-        const range = template(configValue(cfg, ['range'], 'Sheet1!A1'), context);
+        const range = configValue(cfg, ['range'], 'Sheet1!A1');
         const values = configValue(cfg, ['values', 'row'], [new Date().toISOString(), 'AgentFlow Executed']);
         const token = await integrationService.getProviderSecret(owner, 'google-sheets');
         return await googleSheets.appendRow(token, spreadsheetId, range, values);
       }
 
       case 'send-discord-message': {
-        const webhookUrl = template(configValue(cfg, ['webhookUrl'], ''), context);
+        const webhookUrl = configValue(cfg, ['webhookUrl'], '');
         if (!webhookUrl) return null;
-        const content = template(configValue(cfg, ['content', 'message'], 'AgentFlow execution update'), context);
+        const content = configValue(cfg, ['content', 'message'], 'AgentFlow execution update');
         return await discord.sendDiscordMessage(webhookUrl, content);
       }
 
       case 'http-request': {
-        const url = template(configValue(cfg, ['url', 'endpoint'], ''), context);
+        const url = configValue(cfg, ['url', 'endpoint'], '');
         if (!url) return null;
         const method = configValue(cfg, ['method'], 'GET').toUpperCase();
         const response = await axios({

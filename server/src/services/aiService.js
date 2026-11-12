@@ -14,6 +14,31 @@ const nodeCatalog = {
   logic: ['if-else', 'retry', 'delay', 'approval', 'parallel-execution']
 };
 
+function workflowSystemPrompt(userEmail = '') {
+  return `You are an AI workflow architect. Return ONLY valid JSON with this shape:
+{
+  "name": "string",
+  "description": "string",
+  "trigger": { "type": "string", "config": {} },
+  "nodes": [{ "id": "unique_string", "type": "catalog_type", "label": "string", "category": "triggers|actions|ai|logic", "position": { "x": 0, "y": 0 }, "config": {} }],
+  "edges": [{ "id": "unique_string", "source": "existing_node_id", "target": "existing_node_id", "animated": true }]
+}
+
+The graph must be a directed acyclic graph. Always include a trigger node. Chain every requested step sequentially with edges: trigger -> step 1 -> step 2 -> step 3. Never leave action nodes disconnected and never invent node types.
+
+Use these node types and configuration fields:
+- triggers: manual-trigger ({ }), gmail-trigger ({ query }), webhook-trigger ({ path }), schedule-trigger ({ cron }), slack-trigger ({ channel })
+- actions: send-email ({ to, subject, body }), send-slack-message ({ channel, text }), send-discord-message ({ content }), google-sheets-row ({ spreadsheetId, range, values }), http-request ({ url, method, data })
+- ai: ai-extraction, ai-classification, ai-summarization, ai-decision, ai-validation, dynamic-routing (all use { prompt, input })
+- logic: if-else ({ condition }), retry ({ maxRetries }), delay ({ delayMs }), approval ({ requireConfirmation }), parallel-execution ({ branches })
+
+Pass data between steps with templates such as "{{ai_node_1.output}}". A template must reference an earlier node's exact id. Use the previous node's output as the next node's input/body/text/data when the user asks to transform, summarize, classify, or forward data. Do not copy the full user request into an action field.
+
+For email actions, config.to must contain only an email address, config.subject must be relevant or "Agentflow Notification", and config.body must contain only the message. The current user's email is "${userEmail || '(not available)'}"; if the user says "my email" or "my address", use that address. If no real recipient can be determined, use an empty string.
+
+The current user request must be represented by the complete connected workflow graph.`;
+}
+
 function extractEmail(prompt = '') {
   const match = String(prompt).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   return match ? match[0] : '';
@@ -52,154 +77,136 @@ function extractSubject(prompt = '') {
   return 'Agentflow Notification';
 }
 
-function isEmailAutomationPrompt(prompt = '') {
-  return /(send|email|mail|gmail|message)/i.test(prompt);
+function splitPromptSegments(prompt = '') {
+  const text = String(prompt).trim();
+  const segments = [];
+  let start = 0;
+  let quote = '';
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if ((character === '"' || character === "'") && text[index - 1] !== '\\') {
+      quote = quote === character ? '' : quote || character;
+    }
+    if (quote || !/\s/.test(character)) continue;
+
+    const remainder = text.slice(index).match(/^\s+(and then|after that|then|and)\s+/i);
+    if (remainder) {
+      const segment = text.slice(start, index).trim();
+      if (segment) segments.push(segment);
+      index += remainder[0].length - 1;
+      start = index + 1;
+    }
+  }
+
+  const finalSegment = text.slice(start).trim();
+  if (finalSegment) segments.push(finalSegment);
+  return segments.length ? segments : [text];
 }
 
-function buildEmailWorkflow(prompt = '', userEmail = '') {
-  const recipient = requestedEmail(prompt, userEmail);
-  const subject = extractSubject(prompt);
-  const nodes = [
-    {
-      id: 'manual-trigger-1',
-      type: 'manual-trigger',
-      label: 'Manual Trigger',
-      category: 'triggers',
-      position: { x: 100, y: 150 },
-      config: {},
-      status: 'idle'
-    },
-    {
-      id: 'send-email-1',
-      type: 'send-email',
-      label: 'Send Email',
-      category: 'actions',
-      position: { x: 420, y: 150 },
-      config: {
-        to: recipient,
-        subject: subject,
-        body: extractMessageBody(prompt)
-      },
-      status: 'idle'
-    }
-  ];
-  const edges = [
-    {
-      id: 'e-manual-trigger-1-send-email-1',
-      source: 'manual-trigger-1',
-      target: 'send-email-1',
-      animated: true
-    }
-  ];
-  return {
-    name: 'Email Operations Workflow',
-    description: prompt,
-    trigger: { type: 'manual', config: {} },
-    nodes,
-    edges,
-    tags: ['email', 'operations']
-  };
+function triggerForSegment(segment = '') {
+  const text = segment.toLowerCase();
+  if (text.includes('webhook')) return ['webhook-trigger', 'Webhook Trigger'];
+  if (text.includes('schedule') || text.includes('cron')) return ['schedule-trigger', 'Schedule Trigger'];
+  if (text.includes('gmail') || text.includes('email') && /(arrive|receive|inbox|trigger)/.test(text)) {
+    return ['gmail-trigger', 'Gmail Trigger'];
+  }
+  return ['manual-trigger', 'Manual Trigger'];
+}
+
+function actionForSegment(segment = '') {
+  const text = segment.toLowerCase();
+  if (text.includes('slack')) return ['send-slack-message', 'Send Slack Message', 'actions'];
+  if (text.includes('discord')) return ['send-discord-message', 'Send Discord Message', 'actions'];
+  if (text.includes('sheet')) return ['google-sheets-row', 'Google Sheets Row', 'actions'];
+  if (text.includes('email') || text.includes('gmail') || text.includes('mail')) {
+    return ['send-email', 'Send Email', 'actions'];
+  }
+  if (text.includes('http') || text.includes('api') || text.includes('request')) {
+    return ['http-request', 'HTTP Request', 'actions'];
+  }
+  if (text.includes('classif')) return ['ai-classification', 'AI Classification', 'ai'];
+  if (text.includes('summar')) return ['ai-summarization', 'AI Summarization', 'ai'];
+  if (text.includes('extract') || text.includes('generate') || text.includes('analy')) {
+    return ['ai-extraction', 'AI Extraction', 'ai'];
+  }
+  if (text.includes('approv')) return ['approval', 'Approval', 'logic'];
+  if (text.includes('delay') || text.includes('wait')) return ['delay', 'Delay', 'logic'];
+  if (text.includes('retry')) return ['retry', 'Retry', 'logic'];
+  return ['ai-extraction', 'AI Processing', 'ai'];
+}
+
+function fallbackNodeConfig(type, segment, previousId, userEmail) {
+  const previousOutput = previousId ? `{{${previousId}.output}}` : '';
+  if (type === 'send-email') {
+    return {
+      to: requestedEmail(segment, userEmail),
+      subject: extractSubject(segment),
+      body: extractMessageBody(segment, previousOutput)
+    };
+  }
+  if (type === 'send-slack-message') {
+    return { channel: '#general', text: extractMessageBody(segment, previousOutput) };
+  }
+  if (type === 'send-discord-message') {
+    return { content: extractMessageBody(segment, previousOutput) };
+  }
+  if (type === 'google-sheets-row') {
+    return { spreadsheetId: '', range: 'Sheet1!A1', values: previousOutput ? [previousOutput] : [] };
+  }
+  if (type === 'http-request') {
+    return { url: (segment.match(/https?:\/\/\S+/i) || [''])[0], method: 'GET', data: previousOutput };
+  }
+  if (type === 'approval') return { requireConfirmation: true };
+  if (type === 'delay') return { delayMs: 1000 };
+  if (type === 'retry') return { maxRetries: 3 };
+  return { prompt: segment, input: previousOutput };
 }
 
 function buildFallbackWorkflow(prompt = '', userEmail = '') {
-  const promptLower = String(prompt).toLowerCase();
-  let triggerType = 'manual-trigger';
-  let triggerLabel = 'Manual Trigger';
-  if (promptLower.includes('gmail') || promptLower.includes('email trigger')) {
-    triggerType = 'gmail-trigger';
-    triggerLabel = 'Gmail Trigger';
-  } else if (promptLower.includes('webhook')) {
-    triggerType = 'webhook-trigger';
-    triggerLabel = 'Webhook Trigger';
-  } else if (promptLower.includes('schedule') || promptLower.includes('cron')) {
-    triggerType = 'schedule-trigger';
-    triggerLabel = 'Schedule Trigger';
-  }
+  const segments = splitPromptSegments(prompt);
+  const [triggerType, triggerLabel] = triggerForSegment(segments[0]);
+  const hasExplicitTrigger = triggerType !== 'manual-trigger' ||
+    /^(when|whenever|on|after|once|trigger)/i.test(segments[0]);
+  const actionSegments = hasExplicitTrigger
+    ? (segments.length > 1 ? segments.slice(1) : [segments[0]])
+    : segments;
+  const nodes = [{
+    id: 'trigger-1',
+    type: triggerType,
+    label: triggerLabel,
+    category: 'triggers',
+    position: { x: 100, y: 150 },
+    config: {},
+    status: 'idle'
+  }];
 
-  let actionType = 'send-email';
-  let actionLabel = 'Send Email';
-  if (promptLower.includes('discord')) {
-    actionType = 'send-discord-message';
-    actionLabel = 'Send Discord Message';
-  } else if (promptLower.includes('slack')) {
-    actionType = 'send-slack-message';
-    actionLabel = 'Send Slack Message';
-  } else if (promptLower.includes('sheet')) {
-    actionType = 'google-sheets-row';
-    actionLabel = 'Google Sheets Row';
-  }
-
-  const nodes = [
-    {
-      id: `${triggerType}-1`,
-      type: triggerType,
-      label: triggerLabel,
-      category: 'triggers',
-      position: { x: 100, y: 150 },
-      config: {},
+  actionSegments.forEach((segment, index) => {
+    const [type, label, category] = actionForSegment(segment);
+    const id = `node_${index + 1}`;
+    const previousId = nodes[nodes.length - 1].id;
+    nodes.push({
+      id,
+      type,
+      label,
+      category,
+      position: { x: 380 + index * 280, y: 150 },
+      config: fallbackNodeConfig(type, segment, previousId, userEmail),
       status: 'idle'
-    },
-    {
-      id: 'ai-extraction-1',
-      type: 'ai-extraction',
-      label: 'AI Data Extraction',
-      category: 'ai',
-      position: { x: 380, y: 150 },
-      config: { prompt: prompt || 'Extract key entities' },
-      status: 'idle'
-    },
-    {
-      id: `${actionType}-1`,
-      type: actionType,
-      label: actionLabel,
-      category: 'actions',
-      position: { x: 680, y: 150 },
-      config: {
-        to: requestedEmail(prompt, userEmail),
-        subject: extractSubject(prompt),
-        body: extractMessageBody(prompt),
-        message: extractMessageBody(prompt)
-      },
-      status: 'idle'
-    },
-    {
-      id: 'approval-1',
-      type: 'approval',
-      label: 'Operator Approval',
-      category: 'logic',
-      position: { x: 960, y: 150 },
-      config: { requireConfirmation: false },
-      status: 'idle'
-    }
-  ];
-
-  const edges = [
-    {
-      id: `e-${triggerType}-1-ai-extraction-1`,
-      source: `${triggerType}-1`,
-      target: 'ai-extraction-1',
-      animated: true
-    },
-    {
-      id: `e-ai-extraction-1-${actionType}-1`,
-      source: 'ai-extraction-1',
-      target: `${actionType}-1`,
-      animated: true
-    },
-    {
-      id: `e-${actionType}-1-approval-1`,
-      source: `${actionType}-1`,
-      target: 'approval-1',
-      animated: true
-    }
-  ];
+    });
+  });
 
   return {
     name: 'AI Operations Workflow',
     description: prompt,
     trigger: { type: triggerType.replace('-trigger', ''), config: {} },
     nodes,
-    edges,
+    edges: nodes.slice(1).map((node, index) => ({
+      id: `edge-${nodes[index].id}-${node.id}`,
+      source: nodes[index].id,
+      target: node.id,
+      animated: true
+    })),
     tags: ['agentic', 'workflow']
   };
 }
@@ -224,6 +231,42 @@ function extractJson(text = '') {
     return null;
   }
   return null;
+}
+
+function normalizeTemplateReferences(value, knownIds) {
+  if (typeof value === 'string') {
+    return value.replace(/\{\{\s*([A-Za-z0-9_-]+)\.output\s*\}\}/g, (match, nodeId) =>
+      knownIds.has(nodeId) ? match : ''
+    );
+  }
+  if (Array.isArray(value)) return value.map((item) => normalizeTemplateReferences(item, knownIds));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, normalizeTemplateReferences(item, knownIds)])
+    );
+  }
+  return value;
+}
+
+function isAcyclic(nodes, edges) {
+  const adjacency = new Map(nodes.map((node) => [node.id, []]));
+  edges.forEach((edge) => adjacency.get(edge.source)?.push(edge.target));
+  const visiting = new Set();
+  const visited = new Set();
+
+  function visit(nodeId) {
+    if (visiting.has(nodeId)) return false;
+    if (visited.has(nodeId)) return true;
+    visiting.add(nodeId);
+    for (const target of adjacency.get(nodeId) || []) {
+      if (!visit(target)) return false;
+    }
+    visiting.delete(nodeId);
+    visited.add(nodeId);
+    return true;
+  }
+
+  return nodes.every((node) => visit(node.id));
 }
 
 function sanitizeGeneratedWorkflow(graph, prompt = '', userEmail = '') {
@@ -273,6 +316,10 @@ function sanitizeGeneratedWorkflow(graph, prompt = '', userEmail = '') {
 
   if (validNodes.length === 0) return null;
 
+  const normalizedNodes = validNodes.map((node) => ({
+    ...node,
+    config: normalizeTemplateReferences(node.config, knownIds)
+  }));
   const validEdges = [];
   if (Array.isArray(graph.edges)) {
     graph.edges.forEach((edge, index) => {
@@ -291,12 +338,21 @@ function sanitizeGeneratedWorkflow(graph, prompt = '', userEmail = '') {
     });
   }
 
+  const edges = validEdges.length > 0 && isAcyclic(normalizedNodes, validEdges)
+    ? validEdges
+    : normalizedNodes.slice(1).map((node, index) => ({
+        id: `edge-${normalizedNodes[index].id}-${node.id}`,
+        source: normalizedNodes[index].id,
+        target: node.id,
+        animated: true
+      }));
+
   return {
     name: graph.name || 'AI Generated Workflow',
     description: graph.description || prompt,
     trigger: graph.trigger || { type: 'manual', config: {} },
-    nodes: validNodes,
-    edges: validEdges,
+    nodes: normalizedNodes,
+    edges,
     tags: Array.isArray(graph.tags) ? graph.tags : ['ai-generated']
   };
 }
@@ -326,14 +382,7 @@ async function generateWithOpenRouter(prompt, apiKey, userEmail) {
         messages: [
           {
             role: 'system',
-            content: `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.
-
-For send-email nodes, extract fields from the user's request rather than copying the raw request:
-- The current user's email is "${userEmail || '(not available)'}". If the user says "send to my email" or "send to my address", use that exact address.
-- config.to must contain only the email address requested by the user.
-- config.subject must be a relevant subject, or "Agentflow Notification" when no subject is specified.
-- config.body must contain only the core message to send. For example, for "Send an email to someone@example.com saying 'Agentflow test successful!'", set config.body to "Agentflow test successful!" and never to the full prompt.
-Use config.body (not config.message) for email content.`
+            content: workflowSystemPrompt(userEmail)
           },
           { role: 'user', content: prompt }
         ],
@@ -359,14 +408,7 @@ async function generateWithGemini(prompt, apiKey, userEmail) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: env.geminiModel || 'gemini-1.5-flash' });
-    const promptText = `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.
-
-For send-email nodes, extract fields from the user's request rather than copying the raw request:
-- The current user's email is "${userEmail || '(not available)'}". If the user says "send to my email" or "send to my address", use that exact address.
-- config.to must contain only the requested email address.
-- config.subject must be a relevant subject, or "Agentflow Notification" when none is specified.
-- config.body must contain only the core message to send. For example, for "Send an email to someone@example.com saying 'Agentflow test successful!'", set config.body to "Agentflow test successful!" and never to the full prompt.
-Use config.body (not config.message) for email content.
+    const promptText = `${workflowSystemPrompt(userEmail)}
 
 User request: ${prompt}`;
     const result = await model.generateContent(promptText);
@@ -392,9 +434,6 @@ async function generateWorkflow(prompt, owner) {
   if (hasUsableNodes(graph)) {
     const sanitized = sanitizeGeneratedWorkflow(graph, prompt, keys.email);
     if (sanitized) return sanitized;
-  }
-  if (isEmailAutomationPrompt(prompt)) {
-    return buildEmailWorkflow(prompt, keys.email);
   }
   return buildFallbackWorkflow(prompt, keys.email);
 }
