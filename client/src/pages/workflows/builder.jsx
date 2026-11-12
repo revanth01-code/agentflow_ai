@@ -7,17 +7,23 @@ import { useWorkflowStore } from '../../store/workflowStore';
 export default function WorkflowBuilderPage() {
   const { generateWorkflow, loading } = useWorkflowStore();
   const [prompt, setPrompt] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(null);
 
   const submit = async (event) => {
     event.preventDefault();
-    setNotice('');
+    setNotice(null);
     try {
       const generated = await generateWorkflow(prompt);
       const count = generated?.nodes?.length || 0;
-      setNotice(`Generated workflow "${generated?.name || 'Workflow'}" with ${count} nodes.`);
+      setNotice({
+        type: 'success',
+        text: `Generated workflow "${generated?.name || 'Workflow'}" with ${count} nodes.`
+      });
     } catch (err) {
-      setNotice(`Generation error: ${err.response?.data?.message || err.message}`);
+      setNotice({
+        type: 'error',
+        text: err.response?.data?.message || err.message || 'Workflow generation failed.'
+      });
     }
   };
 
@@ -36,10 +42,19 @@ export default function WorkflowBuilderPage() {
               {loading ? 'Generating...' : 'Generate Workflow'}
             </button>
           </form>
+          <p className="mt-2 text-xs text-slate-500">
+            💡 Need ideas? Try: 'Read from my Google Sheet and send a summary to Slack.'
+          </p>
           <p className="mt-3 rounded bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
             ⚠️ AI can make mistakes. Please review the generated workflow before executing.
           </p>
-          {notice && <p className="mt-3 rounded bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{notice}</p>}
+          {notice && (
+            <p className={`mt-3 rounded px-3 py-2 text-sm font-medium ${
+              notice.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-700'
+            }`}>
+              {notice.text}
+            </p>
+          )}
         </div>
         <WorkflowCanvas />
       </AppShell>

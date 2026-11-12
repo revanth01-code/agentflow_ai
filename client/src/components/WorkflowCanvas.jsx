@@ -318,7 +318,11 @@ function WorkflowCanvasInner() {
           </div>
         </div>
         {message && (
-          <div className="border-b border-teal-100 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-900">
+          <div className={`border-b px-4 py-2 text-sm font-medium ${
+            message.startsWith('Execution failed')
+              ? 'border-red-100 bg-red-50 text-red-700'
+              : 'border-teal-100 bg-teal-50 text-teal-900'
+          }`}>
             {message}
           </div>
         )}

@@ -359,6 +359,7 @@ function oauthStatus() {
 module.exports = {
   listIntegrations,
   upsertIntegration,
+  getIntegration,
   getProviderSecret,
   startOAuth,
   completeOAuth,

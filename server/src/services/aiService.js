@@ -530,29 +530,29 @@ async function getExecutionLessons(owner) {
           .lean();
   }
 
-  async function getFeedbackLessons() {
-    const relatedPattern = /\b(workflow|generation|generate|node|edge|execution|prompt|AI)\b/i;
-    const feedback = isMemoryStore()
-      ? memoryStore.list('feedback')
-          .filter((item) => item.status === 'unread' && relatedPattern.test(item.message || ''))
-          .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
-          .slice(0, 3)
-      : await Feedback.find({
-          status: 'unread',
-          message: { $regex: relatedPattern }
-        })
-          .sort({ createdAt: -1 })
-          .limit(3)
-          .select('message')
-          .lean();
-
-    return feedback
-      .map((item) => `- ${String(item.message || '').slice(0, 400)}`)
-      .join('\n');
-  }
-
   return logs
     .map((log) => `- ${String(log.event || 'execution failure')}: ${String(log.message || '').slice(0, 300)}`)
+    .join('\n');
+}
+
+async function getFeedbackLessons() {
+  const relatedPattern = /\b(workflow|generation|generate|node|edge|execution|prompt|AI)\b/i;
+  const feedback = isMemoryStore()
+    ? memoryStore.list('feedback')
+        .filter((item) => item.status === 'unread' && relatedPattern.test(item.message || ''))
+        .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+        .slice(0, 3)
+    : await Feedback.find({
+        status: 'unread',
+        message: { $regex: relatedPattern }
+      })
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .select('message')
+        .lean();
+
+  return feedback
+    .map((item) => `- ${String(item.message || '').slice(0, 400)}`)
     .join('\n');
 }
 
@@ -606,7 +606,7 @@ User request: ${prompt}`;
 async function generateWorkflow(prompt, owner) {
   const keys = await getAiProviderKeys(owner);
   if (!keys.openrouterApiKey && !keys.geminiApiKey) {
-    throw new ApiError(400, 'Provide a Gemini or OpenRouter API key in Settings before generating workflows.', {
+    throw new ApiError(400, 'Please go to Settings and add your Gemini or OpenRouter API key before generating a workflow.', {
       code: 'MISSING_API_KEY'
     });
   }
@@ -658,4 +658,4 @@ async function runAiTask(prompt, owner) {
   return result.response.text();
 }
 
-module.exports = { generateWorkflow, getAiProviderKeys, runAiTask, nodeCatalog };
+module.exports = { generateWorkflow, getAiProviderKeys, getFeedbackLessons, runAiTask, nodeCatalog };

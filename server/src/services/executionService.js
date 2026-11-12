@@ -8,6 +8,27 @@ const { runAgenticExecution } = require('../agents/orchestrator');
 const { createLog, listLogs } = require('./logService');
 const { createNotification } = require('./notificationService');
 const { emitEvent } = require('../config/socket');
+const integrationService = require('./integrationService');
+
+async function validateWorkflowIntegrations(workflow) {
+  const requiredProviders = new Map();
+  (workflow?.nodes || []).forEach((node) => {
+    if (node.type === 'send-email') requiredProviders.set('gmail', 'Gmail');
+    if (node.type === 'send-slack-message') requiredProviders.set('slack', 'Slack');
+  });
+
+  const owner = workflow?.owner?._id || workflow?.owner;
+  for (const [provider, label] of requiredProviders) {
+    const integration = await integrationService.getIntegration(owner, provider);
+    if (!integration || integration.status !== 'connected') {
+      throw new ApiError(
+        400,
+        `Please go to Integrations and connect your ${label} account before running this workflow.`,
+        { code: 'INTEGRATION_NOT_CONNECTED', provider }
+      );
+    }
+  }
+}
 
 async function createExecutionRecord(workflow, input = {}) {
   const workflowId = String(workflow._id || workflow.id);
@@ -56,6 +77,7 @@ async function getExecution(id) {
 }
 
 async function executeWorkflow(workflow, input = {}) {
+  await validateWorkflowIntegrations(workflow);
   const workflowId = String(workflow._id || workflow.id);
   const execution = await createExecutionRecord(workflow, input);
   const execId = String(execution._id);

@@ -32,6 +32,7 @@ const sendFeedback = asyncHandler(async (req, res) => {
   }
 
   const senderEmail = req.user.email;
+  const submittedAt = new Date();
   const userId = String(req.user._id || req.user.id);
   const feedbackData = {
     user: userId,
@@ -52,11 +53,13 @@ const sendFeedback = asyncHandler(async (req, res) => {
         to: adminEmail,
         replyTo: senderEmail,
         subject: `Agentflow feedback from ${senderEmail}`,
-        text: `User: ${senderEmail}\n\n${message}`
+        text: `User: ${senderEmail}\nTimestamp: ${submittedAt.toISOString()}\n\n${message}`
       });
     } catch (error) {
       console.error('Feedback notification email failed:', error.message);
     }
+  } else {
+    console.warn('Feedback notification email skipped: SMTP is not configured.');
   }
 
   res.status(202).json({ message: 'Feedback saved successfully', feedbackId: feedback._id });
