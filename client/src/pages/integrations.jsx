@@ -86,6 +86,16 @@ function IntegrationsContent() {
     }
   };
 
+  const disconnectProvider = async (id, name) => {
+    try {
+      await api.post(`/integrations/${id}/disconnect`);
+      setMessage(`${name} disconnected successfully.`);
+      await refreshIntegrations();
+    } catch (err) {
+      setMessage(`Failed to disconnect ${name}: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
   return (
     <AppShell title="API Integrations">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -121,6 +131,15 @@ function IntegrationsContent() {
                 >
                   <LinkIcon size={15} />
                   {connected.has(id) ? 'Reconnect OAuth' : 'Connect OAuth'}
+                </button>
+              )}
+              {connected.has(id) && oauthManaged && (
+                <button
+                  type="button"
+                  onClick={() => disconnectProvider(id, name)}
+                  className="mb-3 ml-2 inline-flex items-center gap-2 rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                >
+                  Disconnect
                 </button>
               )}
               <button

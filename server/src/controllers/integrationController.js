@@ -22,6 +22,11 @@ const startOAuth = asyncHandler(async (req, res) => {
   res.status(200).json({ url });
 });
 
+const disconnect = asyncHandler(async (req, res) => {
+  const data = await integrationService.disconnectIntegration(req.user, req.params.provider);
+  res.status(200).json(data);
+});
+
 const oauthCallback = async (req, res) => {
   try {
     const redirectUrl = await integrationService.completeOAuth(req.params.provider, req.query);
@@ -36,4 +41,4 @@ const oauthError = asyncHandler(async (req, res) => {
   res.redirect(`${env.clientUrl}/integrations?error=${encodeURIComponent(error)}`);
 });
 
-module.exports = { list, upsert, status, startOAuth, oauthCallback, oauthError };
+module.exports = { list, upsert, status, startOAuth, disconnect, oauthCallback, oauthError };

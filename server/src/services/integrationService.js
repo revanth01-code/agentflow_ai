@@ -105,7 +105,46 @@ async function getIntegration(owner, provider) {
   if (isMemoryStore()) {
     return memoryStore.findOne('integrations', { owner: ownerId, provider });
   }
+
   return Integration.findOne({ owner: ownerId, provider }).lean();
+}
+
+async function disconnectIntegration(owner, provider) {
+  const ownerId = String(owner._id || owner);
+  const integration = await getIntegration(ownerId, provider);
+  if (!integration) return { provider, disconnected: true };
+
+  const tokenValue = integration.encryptedRefreshToken || integration.encryptedAccessToken;
+  const token = tokenValue ? decrypt(tokenValue) : null;
+
+  try {
+    if (token && (provider === 'gmail' || provider === 'google-sheets')) {
+      await axios.post('https://oauth2.googleapis.com/revoke', null, { params: { token } });
+    } else if (token && provider === 'slack') {
+      await axios.post('https://slack.com/api/auth.revoke', null, {
+        params: { token },
+        validateStatus: (status) => status < 500
+      });
+    } else if (token && provider === 'discord') {
+      await axios.post('https://discord.com/api/oauth2/token/revoke', new URLSearchParams({
+        token,
+        client_id: env.discordClientId || '',
+        client_secret: env.discordClientSecret || ''
+      }).toString(), {
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        validateStatus: (status) => status < 500
+      });
+    }
+  } catch (error) {
+    console.warn(`OAuth token revocation failed for ${provider}: ${error.message}`);
+  }
+
+  if (isMemoryStore()) {
+    memoryStore.remove('integrations', integration._id);
+  } else {
+    await Integration.deleteOne({ owner: ownerId, provider });
+  }
+  return { provider, disconnected: true };
 }
 
 async function refreshGoogleAccessToken(owner, provider, refreshToken) {
@@ -360,6 +399,7 @@ module.exports = {
   listIntegrations,
   upsertIntegration,
   getIntegration,
+  disconnectIntegration,
   getProviderSecret,
   startOAuth,
   completeOAuth,

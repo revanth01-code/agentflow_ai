@@ -6,6 +6,7 @@ const executionRoutes = require('./executionRoutes');
 const integrationRoutes = require('./integrationRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const feedbackRoutes = require('./feedbackRoutes');
+const templateRoutes = require('./templateRoutes');
 
 const router = express.Router();
 
@@ -16,5 +17,6 @@ router.use('/executions', executionRoutes);
 router.use('/integrations', integrationRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/feedback', feedbackRoutes);
+router.use('/templates', templateRoutes);
 
 module.exports = router;

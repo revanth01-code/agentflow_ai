@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Activity, Blocks, Cable, LayoutDashboard, LogOut, ScrollText, Settings, Zap } from 'lucide-react';
+import { Activity, Blocks, Cable, LayoutDashboard, Library, LogOut, ScrollText, Settings, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import WelcomeModal from './WelcomeModal';
 import FeedbackWidget from './FeedbackWidget';
@@ -9,6 +9,7 @@ const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
   ['Workflow Builder', '/workflows/builder', Blocks],
   ['Execution Logs', '/executions', ScrollText],
+  ['Templates', '/templates', Library],
   ['API Integrations', '/integrations', Cable],
   ['Settings', '/settings', Settings]
 ];
@@ -24,7 +25,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white px-4 py-5 lg:block">
+      <aside data-tour="sidebar" className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white px-4 py-5 lg:block">
         <div className="mb-8 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded bg-teal-700 text-white">
             <Zap size={20} />
@@ -42,6 +43,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
               <Link
                 key={href}
                 href={href}
+                data-tour={href === '/settings' ? 'settings' : href === '/integrations' ? 'integrations' : href === '/workflows/builder' ? 'builder' : undefined}
                 className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-medium ${
                   active ? 'bg-teal-50 text-teal-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                 }`}

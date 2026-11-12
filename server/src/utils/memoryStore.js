@@ -8,7 +8,8 @@ const collections = {
   integrations: [],
   notifications: [],
   agentMemory: [],
-  feedback: []
+  feedback: [],
+  templates: []
 };
 
 function now() {

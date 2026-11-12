@@ -15,7 +15,9 @@ const ExecutionSchema = new mongoose.Schema({
   input: { type: mongoose.Schema.Types.Mixed, default: {} },
   output: { type: mongoose.Schema.Types.Mixed, default: {} },
   error: { type: String, default: null },
-  retryCount: { type: Number, default: 0 }
+  retryCount: { type: Number, default: 0 },
+  traceId: { type: String, index: true, default: null },
+  spanId: { type: String, default: null }
 }, { timestamps: true });
 
 ExecutionSchema.index({ workflow: 1, createdAt: -1 });

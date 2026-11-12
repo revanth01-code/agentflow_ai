@@ -1,13 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import AppShell from '../../components/AppShell';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import WorkflowCanvas from '../../components/WorkflowCanvas';
 import { useWorkflowStore } from '../../store/workflowStore';
 
 export default function WorkflowBuilderPage() {
-  const { generateWorkflow, loading } = useWorkflowStore();
+  const router = useRouter();
+  const { generateWorkflow, loadWorkflow, loading } = useWorkflowStore();
   const [prompt, setPrompt] = useState('');
   const [notice, setNotice] = useState(null);
+
+  useEffect(() => {
+    if (!router.isReady || !router.query.workflow) return;
+    loadWorkflow(router.query.workflow).catch((err) => setNotice({
+      type: 'error',
+      text: err.response?.data?.message || err.message || 'Unable to load template.'
+    }));
+  }, [router.isReady, router.query.workflow, loadWorkflow]);
 
   const submit = async (event) => {
     event.preventDefault();

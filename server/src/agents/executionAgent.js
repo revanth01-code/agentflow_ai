@@ -159,6 +159,23 @@ async function runRealAction({ node, workflow, context }) {
 }
 
 async function executionAgent({ node, workflow, context }) {
+  if (node.type === 'human-in-the-loop') {
+    const humanInput = context.hitlInputs?.[node.id];
+    if (humanInput === undefined || humanInput === null) {
+      return {
+        nodeId: node.id,
+        type: node.type,
+        status: 'paused',
+        paused: true,
+        prompt: node.config?.prompt || node.config?.text || 'Please provide input to continue this workflow.'
+      };
+    }
+    return completed(node, {
+      input: String(humanInput),
+      submittedAt: new Date().toISOString()
+    });
+  }
+
   const realResult = await runRealAction({ node, workflow, context });
   if (realResult !== null) {
     return completed(node, realResult);

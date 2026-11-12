@@ -9,6 +9,7 @@ const { createLog, listLogs } = require('./logService');
 const { createNotification } = require('./notificationService');
 const { emitEvent } = require('../config/socket');
 const integrationService = require('./integrationService');
+const { randomUUID } = require('crypto');
 
 async function validateWorkflowIntegrations(workflow) {
   const requiredProviders = new Map();
@@ -43,7 +44,9 @@ async function createExecutionRecord(workflow, input = {}) {
     input: input || {},
     output: {},
     error: null,
-    retryCount: 0
+    retryCount: 0,
+    traceId: randomUUID(),
+    spanId: randomUUID()
   };
 
   if (isMemoryStore()) {
@@ -76,17 +79,19 @@ async function getExecution(id) {
   return exec;
 }
 
-async function executeWorkflow(workflow, input = {}) {
+async function executeWorkflow(workflow, input = {}, options = {}) {
   await validateWorkflowIntegrations(workflow);
   const workflowId = String(workflow._id || workflow.id);
-  const execution = await createExecutionRecord(workflow, input);
+  const execution = options.execution || await createExecutionRecord(workflow, input);
   const execId = String(execution._id);
 
   // Queue job
-  await queues.workflowExecutionQueue.add('execute', {
-    executionId: execId,
-    workflowId
-  });
+  if (!options.execution) {
+    await queues.workflowExecutionQueue.add('execute', {
+      executionId: execId,
+      workflowId
+    });
+  }
 
   const startTime = Date.now();
   await updateExecution(execId, { status: 'RUNNING', startedAt: new Date() });
@@ -98,26 +103,55 @@ async function executeWorkflow(workflow, input = {}) {
       workflow,
       execution,
       input,
+      traceId: execution.traceId,
+      resumeNodeId: options.resumeNodeId,
+      initialOutputs: options.initialOutputs,
+      hitlInput: options.hitlInput,
       onEvent: async (event) => {
+        if (event.nodeId) {
+          await updateExecution(execId, { currentNodeId: event.nodeId });
+        }
         await createLog({
           execution: execId,
           workflow: workflowId,
+          traceId: event.traceId || execution.traceId,
+          spanId: event.spanId || execution.spanId,
+          parentSpanId: event.parentSpanId || null,
           nodeId: event.nodeId,
           agent: event.agent,
           level: event.level || 'info',
-          event: event.agent,
+          event: event.event || event.agent,
           message: event.message,
-          metadata: event.metadata
+          metadata: event.metadata,
+          durationMs: event.metadata?.durationMs || null
         });
       }
     });
 
     const durationMs = Date.now() - startTime;
+    if (result.paused) {
+      const pausedRecord = await updateExecution(execId, {
+        status: 'PAUSED',
+        currentNodeId: result.pauseNodeId,
+        completedAt: null,
+        durationMs,
+        output: result.outputs || {},
+        traceId: result.traceId || execution.traceId
+      });
+      emitEvent(`execution:${execId}`, 'execution:paused', {
+        ...pausedRecord,
+        prompt: result.pausePrompt
+      });
+      return pausedRecord;
+    }
+
     const completedRecord = await updateExecution(execId, {
       status: 'COMPLETED',
       completedAt: new Date(),
       durationMs,
-      output: result.outputs || {}
+      currentNodeId: null,
+      output: result.outputs || {},
+      traceId: result.traceId || execution.traceId
     });
 
     if (isMemoryStore()) {
@@ -153,6 +187,9 @@ async function executeWorkflow(workflow, input = {}) {
     await createLog({
       execution: execId,
       workflow: workflowId,
+      traceId: execution.traceId,
+      spanId: randomUUID(),
+      parentSpanId: execution.spanId,
       nodeId: err.nodeId,
       agent: 'orchestrator',
       level: 'error',
@@ -208,10 +245,18 @@ async function cancelExecution(id) {
   return updated;
 }
 
-async function resumeExecution(id) {
+async function resumeExecution(id, humanInput) {
   const current = await getExecution(id);
   const workflow = current.workflowSnapshot || current.workflow;
-  return executeWorkflow(workflow, current.input || {});
+  if (current.status !== 'PAUSED') {
+    throw new ApiError(400, 'Only paused executions can be resumed.', { code: 'EXECUTION_NOT_PAUSED' });
+  }
+  return executeWorkflow(workflow, current.input || {}, {
+    execution: current,
+    resumeNodeId: current.currentNodeId,
+    initialOutputs: current.output || {},
+    hitlInput: humanInput
+  });
 }
 
 async function executionTimeline(id) {

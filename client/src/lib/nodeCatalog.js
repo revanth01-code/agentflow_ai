@@ -43,6 +43,7 @@ export const nodeGroups = [
       ['retry', 'Retry Node'],
       ['delay', 'Delay Node'],
       ['approval', 'Approval Node'],
+      ['human-in-the-loop', 'Human Input'],
       ['parallel-execution', 'Parallel Execution Node']
     ]
   }

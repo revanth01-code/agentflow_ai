@@ -5,6 +5,7 @@ import AppShell from '../components/AppShell';
 import MetricGrid from '../components/MetricGrid';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useWorkflowStore } from '../store/workflowStore';
+import OnboardingTour from '../components/OnboardingTour';
 
 function DashboardContent() {
   const { dashboard, workflows, fetchDashboard, fetchWorkflows } = useWorkflowStore();
@@ -59,6 +60,7 @@ function DashboardContent() {
           </div>
         </section>
       </div>
+      <OnboardingTour />
     </AppShell>
   );
 }

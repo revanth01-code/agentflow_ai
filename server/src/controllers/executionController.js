@@ -22,7 +22,7 @@ const pause = asyncHandler(async (req, res) => {
 });
 
 const resume = asyncHandler(async (req, res) => {
-  const data = await executionService.resumeExecution(req.params.id);
+  const data = await executionService.resumeExecution(req.params.id, req.body?.input);
   res.status(200).json(data);
 });
 

@@ -3,7 +3,20 @@ const memoryStore = require('../utils/memoryStore');
 const ExecutionLog = require('../models/ExecutionLog');
 const { emitEvent } = require('../config/socket');
 
-async function createLog({ execution, workflow, nodeId, agent, level = 'info', event, message, metadata = {} }) {
+async function createLog({
+  execution,
+  workflow,
+  nodeId,
+  agent,
+  level = 'info',
+  event,
+  message,
+  metadata = {},
+  traceId = null,
+  spanId = null,
+  parentSpanId = null,
+  durationMs = null
+}) {
   const logData = {
     execution: String(execution),
     workflow: String(workflow),
@@ -12,6 +25,10 @@ async function createLog({ execution, workflow, nodeId, agent, level = 'info', e
     level: level || 'info',
     event: event || 'log',
     message: String(message || ''),
+    traceId,
+    spanId,
+    parentSpanId,
+    durationMs,
     metadata: metadata || {}
   };
 

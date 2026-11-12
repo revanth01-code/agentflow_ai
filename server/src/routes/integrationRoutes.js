@@ -14,5 +14,6 @@ router.get('/', controller.list);
 router.get('/status', controller.status);
 router.get('/oauth/:provider/start', controller.startOAuth);
 router.post('/', body('provider').notEmpty(), validate, controller.upsert);
+router.post('/:provider/disconnect', controller.disconnect);
 
 module.exports = router;

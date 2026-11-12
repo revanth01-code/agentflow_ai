@@ -14,7 +14,7 @@ const nodeCatalog = {
   triggers: ['gmail-trigger', 'webhook-trigger', 'schedule-trigger', 'manual-trigger', 'slack-trigger'],
   actions: ['send-email', 'send-slack-message', 'send-discord-message', 'google-sheets-row', 'http-request', 'database-insert'],
   ai: ['ai-generate', 'ai-classification', 'ai-extraction', 'ai-summarization', 'ai-decision', 'ai-validation', 'dynamic-routing'],
-  logic: ['if-else', 'retry', 'delay', 'approval', 'parallel-execution']
+  logic: ['if-else', 'retry', 'delay', 'approval', 'human-in-the-loop', 'parallel-execution']
 };
 
 function workflowSystemPrompt(userEmail = '', executionLessons = '') {
@@ -33,7 +33,7 @@ Use these node types and configuration fields:
 - triggers: manual-trigger ({ }), gmail-trigger ({ query }), webhook-trigger ({ path }), schedule-trigger ({ cron }), slack-trigger ({ channel })
 - actions: send-email ({ to, subject, body }), send-slack-message ({ channel, text }), send-discord-message ({ content }), google-sheets-row ({ spreadsheetId, range, values }), http-request ({ url, method, data })
 - ai: ai-generate ({ prompt, input }), ai-extraction ({ prompt, input }), ai-classification ({ prompt, input }), ai-summarization ({ prompt, input }), ai-decision ({ prompt, input }), ai-validation ({ prompt, input }), dynamic-routing ({ prompt, input })
-- logic: if-else ({ condition }), retry ({ maxRetries }), delay ({ delayMs }), approval ({ requireConfirmation }), parallel-execution ({ branches })
+- logic: if-else ({ condition }), retry ({ maxRetries }), delay ({ delayMs }), approval ({ requireConfirmation }), human-in-the-loop ({ prompt }), parallel-execution ({ branches })
 
 Pass data between steps with templates such as "{{ai_node_1.output}}". A template must reference an earlier node's exact id. For example, an email after an AI generation node MUST use 'body: {{ai_node_1.output}}', and a Slack action after an AI generation node MUST use 'text: {{ai_node_1.output}}'. Use the previous node's output as the next node's input/body/text/data when the user asks to transform, summarize, classify, write, generate, or forward data. Do not copy the full user request into an action field.
 

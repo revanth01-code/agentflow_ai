@@ -12,6 +12,10 @@ const ExecutionLogSchema = new mongoose.Schema({
   },
   event: { type: String, default: '' },
   message: { type: String, required: true },
+  traceId: { type: String, index: true, default: null },
+  spanId: { type: String, default: null },
+  parentSpanId: { type: String, default: null },
+  durationMs: { type: Number, default: null },
   metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
 
