@@ -24,11 +24,11 @@ function configValue(config = {}, keys = [], fallback = '') {
 
 function template(value, context = {}) {
   if (typeof value !== 'string') return value;
-  return value.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, path) => {
+  return value.replace(/\{\{\s*([\w-]+(?:\.[\w-]+)*)\s*\}\}/g, (_, path) => {
     const parts = path.split('.');
     let current = context;
     let startIndex = 0;
-    if (parts.length >= 2 && parts[1] === 'output' && context.outputs?.[parts[0]] !== undefined) {
+    if (parts.length >= 2 && parts[1] === 'output' && Object.prototype.hasOwnProperty.call(context.outputs || {}, parts[0])) {
       current = context.outputs[parts[0]];
       startIndex = 2;
     }
@@ -40,7 +40,11 @@ function template(value, context = {}) {
         return '';
       }
     }
-    if (current === undefined || current === null) return '';
+    if (
+      current === undefined ||
+      current === null ||
+      (startIndex === 2 && typeof current === 'object' && !Array.isArray(current) && Object.keys(current).length === 0)
+    ) return '';
     return typeof current === 'object' ? JSON.stringify(current) : String(current);
   });
 }

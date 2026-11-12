@@ -6,6 +6,7 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   password: { type: String, required: true, select: false },
+  googleId: { type: String, sparse: true, unique: true, select: false },
   geminiApiKey: { type: String, default: '', select: false },
   openrouterApiKey: { type: String, default: '', select: false },
   role: { type: String, enum: ['admin', 'operator'], default: 'operator' },

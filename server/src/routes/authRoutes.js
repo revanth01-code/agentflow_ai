@@ -17,6 +17,8 @@ router.post('/login', [
   body('password').notEmpty()
 ], validate, controller.login);
 
+router.get('/google', controller.google);
+router.get('/google/callback', controller.googleCallback);
 router.get('/me', auth, controller.me);
 router.put('/ai-keys', auth, [
   body('geminiApiKey').optional().isString(),

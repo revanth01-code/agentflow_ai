@@ -26,6 +26,7 @@ export const nodeGroups = [
     title: 'AI Nodes',
     category: 'ai',
     nodes: [
+      ['ai-generate', 'AI Generation'],
       ['ai-classification', 'AI Classification'],
       ['ai-extraction', 'AI Extraction'],
       ['ai-summarization', 'AI Summarization'],

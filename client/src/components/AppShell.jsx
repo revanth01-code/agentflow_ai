@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Activity, Blocks, Cable, LayoutDashboard, LogOut, ScrollText, Settings, Zap } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import WelcomeModal from './WelcomeModal';
+import FeedbackWidget from './FeedbackWidget';
 
 const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
@@ -35,7 +36,8 @@ export default function AppShell({ children, title = 'AI Operations' }) {
         </div>
         <nav className="space-y-1">
           {nav.map(([label, href, Icon]) => {
-            const active = router.pathname === href;
+            const active = router.pathname === href ||
+              (href === '/workflows/builder' && router.pathname.startsWith('/workflows/'));
             return (
               <Link
                 key={href}
@@ -72,6 +74,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
         <div className="p-4 lg:p-8">{children}</div>
       </main>
       <WelcomeModal user={user} />
+      <FeedbackWidget />
     </div>
   );
 }

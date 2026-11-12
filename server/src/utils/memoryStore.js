@@ -7,7 +7,8 @@ const collections = {
   executionLogs: [],
   integrations: [],
   notifications: [],
-  agentMemory: []
+  agentMemory: [],
+  feedback: []
 };
 
 function now() {

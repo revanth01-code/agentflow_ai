@@ -46,6 +46,8 @@ function normalizeEdges(edges = [], nodes = []) {
         id: edge.id || `e-${sStr}-${tStr}-${index}`,
         source: sStr,
         target: tStr,
+        sourceHandle: edge.sourceHandle || undefined,
+        targetHandle: edge.targetHandle || undefined,
         label: edge.label || '',
         animated: edge.animated !== false,
         condition: edge.condition || ''

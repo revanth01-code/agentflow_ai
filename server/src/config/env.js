@@ -14,6 +14,7 @@ const env = {
   geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  googleAuthRedirectUri: process.env.GOOGLE_AUTH_REDIRECT_URI || '',
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || '',
   googleSheetsRedirectUri: process.env.GOOGLE_SHEETS_REDIRECT_URI || '',
   slackClientId: process.env.SLACK_CLIENT_ID || '',

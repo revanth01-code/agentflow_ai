@@ -37,6 +37,9 @@ export default function WelcomeModal({ user }) {
           secure. Please visit Settings to add your Gemini or OpenRouter keys. Note: OAuth tokens (Gmail, Slack) may
           expire, so you can reconnect them anytime in Integrations.
         </p>
+        <p className="mt-4 rounded bg-teal-50 px-3 py-2 text-xs font-medium leading-5 text-teal-900">
+          🔒 Your API keys are encrypted at rest using AES-256 encryption. We never store plain-text secrets.
+        </p>
         <div className="mt-6 flex flex-wrap justify-end gap-3">
           <button
             type="button"

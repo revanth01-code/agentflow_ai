@@ -36,6 +36,9 @@ export default function WorkflowBuilderPage() {
               {loading ? 'Generating...' : 'Generate Workflow'}
             </button>
           </form>
+          <p className="mt-3 rounded bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+            ⚠️ AI can make mistakes. Please review the generated workflow before executing.
+          </p>
           {notice && <p className="mt-3 rounded bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">{notice}</p>}
         </div>
         <WorkflowCanvas />

@@ -49,6 +49,14 @@ export const useAuthStore = create((set) => ({
     set({ user, token, ready: true });
     return response.data;
   },
+  loginWithGoogleToken: async (token) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TOKEN_KEY, token);
+    }
+    const response = await api.get('/auth/me');
+    set({ user: response.data.user, token, ready: true });
+    return response.data;
+  },
   logout: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(TOKEN_KEY);

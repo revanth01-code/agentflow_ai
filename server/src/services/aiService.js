@@ -7,6 +7,7 @@ const memoryStore = require('../utils/memoryStore');
 const User = require('../models/User');
 const Workflow = require('../models/Workflow');
 const ExecutionLog = require('../models/ExecutionLog');
+const Feedback = require('../models/Feedback');
 const ApiError = require('../utils/apiError');
 
 const nodeCatalog = {
@@ -37,6 +38,8 @@ Use these node types and configuration fields:
 Pass data between steps with templates such as "{{ai_node_1.output}}". A template must reference an earlier node's exact id. For example, an email after an AI generation node MUST use 'body: {{ai_node_1.output}}', and a Slack action after an AI generation node MUST use 'text: {{ai_node_1.output}}'. Use the previous node's output as the next node's input/body/text/data when the user asks to transform, summarize, classify, write, generate, or forward data. Do not copy the full user request into an action field.
 
 Mandate AI generation: if the user asks to write, generate, draft, compose, or create content, text, a message, an email body, or a reply, create an 'ai-generate' node. If that generated content is sent elsewhere, place the destination action after it and reference the AI node output with a template.
+
+Logic-node rules are mandatory. An 'if-else' node must have config.condition containing the condition to evaluate and exactly two outgoing edges: one with sourceHandle 'true' for the true branch and one with sourceHandle 'false' for the false branch. A 'parallel-execution' node must have config.branches describing the branches and one outgoing edge per branch with distinct sourceHandle values such as 'branch-1' and 'branch-2'. Preserve sourceHandle on every logic edge. Do not flatten conditional or parallel branches into one sequential action.
 
 For email actions, config.to must contain only an email address, config.subject must be relevant or "Agentflow Notification", and config.body must contain only the message. The current user's email is "${userEmail || '(not available)'}"; if the user says "my email" or "my address", use that address. If no real recipient can be determined, use an empty string.
 
@@ -458,6 +461,8 @@ function sanitizeGeneratedWorkflow(graph, prompt = '', userEmail = '') {
           id: edge.id || `e-${source}-${target}-${index}`,
           source,
           target,
+          sourceHandle: edge.sourceHandle || undefined,
+          targetHandle: edge.targetHandle || undefined,
           label: edge.label || '',
           animated: edge.animated !== false,
           condition: edge.condition || ''
@@ -525,6 +530,27 @@ async function getExecutionLessons(owner) {
           .lean();
   }
 
+  async function getFeedbackLessons() {
+    const relatedPattern = /\b(workflow|generation|generate|node|edge|execution|prompt|AI)\b/i;
+    const feedback = isMemoryStore()
+      ? memoryStore.list('feedback')
+          .filter((item) => item.status === 'unread' && relatedPattern.test(item.message || ''))
+          .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+          .slice(0, 3)
+      : await Feedback.find({
+          status: 'unread',
+          message: { $regex: relatedPattern }
+        })
+          .sort({ createdAt: -1 })
+          .limit(3)
+          .select('message')
+          .lean();
+
+    return feedback
+      .map((item) => `- ${String(item.message || '').slice(0, 400)}`)
+      .join('\n');
+  }
+
   return logs
     .map((log) => `- ${String(log.event || 'execution failure')}: ${String(log.message || '').slice(0, 300)}`)
     .join('\n');
@@ -586,9 +612,14 @@ async function generateWorkflow(prompt, owner) {
   }
 
   const executionLessons = await getExecutionLessons(owner);
-  let graph = await generateWithOpenRouter(prompt, keys.openrouterApiKey, keys.email, executionLessons);
+  const feedbackLessons = await getFeedbackLessons();
+  const lessons = [
+    executionLessons ? `Execution failures:\n${executionLessons}` : '',
+    feedbackLessons ? `Lessons Learned from user feedback:\n${feedbackLessons}` : ''
+  ].filter(Boolean).join('\n');
+  let graph = await generateWithOpenRouter(prompt, keys.openrouterApiKey, keys.email, lessons);
   if (!hasUsableNodes(graph)) {
-    graph = await generateWithGemini(prompt, keys.geminiApiKey, keys.email, executionLessons);
+    graph = await generateWithGemini(prompt, keys.geminiApiKey, keys.email, lessons);
   }
   if (hasUsableNodes(graph)) {
     const sanitized = sanitizeGeneratedWorkflow(graph, prompt, keys.email);

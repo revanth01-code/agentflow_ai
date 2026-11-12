@@ -15,9 +15,15 @@ body {
 }
 
 .react-flow__node {
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+
+.react-flow__node:hover {
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.2);
+  transform: translateY(-2px);
 }
 
 .react-flow__handle {

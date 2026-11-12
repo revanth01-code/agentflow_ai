@@ -35,6 +35,8 @@ function exportJson(workflow, nodes, edges) {
       id: e.id,
       source: typeof e.source === 'object' ? e.source.id : e.source,
       target: typeof e.target === 'object' ? e.target.id : e.target,
+      sourceHandle: e.sourceHandle || undefined,
+      targetHandle: e.targetHandle || undefined,
       label: e.label || '',
       animated: e.animated !== false
     }))
@@ -90,7 +92,19 @@ function WorkflowNode({ id, data, selected, onRemove }) {
         {status === 'completed' && <CheckCircle2 size={13} />}
         {status}
       </span>
-      <Handle type="source" position={Position.Right} />
+      {data?.type === 'if-else' ? (
+        <>
+          <Handle id="true" type="source" position={Position.Bottom} style={{ left: '35%', background: '#16a34a' }} />
+          <Handle id="false" type="source" position={Position.Bottom} style={{ left: '65%', background: '#dc2626' }} />
+        </>
+      ) : data?.type === 'parallel-execution' ? (
+        <>
+          <Handle id="branch-1" type="source" position={Position.Bottom} style={{ left: '35%' }} />
+          <Handle id="branch-2" type="source" position={Position.Bottom} style={{ left: '65%' }} />
+        </>
+      ) : (
+        <Handle type="source" position={Position.Right} />
+      )}
     </div>
   );
 }
