@@ -108,6 +108,7 @@ async function runAgenticExecution({ workflow, execution, input = {}, onEvent = 
         });
 
         if (recovery.action === 'escalate' || attempt >= maxAttempts) {
+          err.nodeId = node.id;
           throw err;
         }
 

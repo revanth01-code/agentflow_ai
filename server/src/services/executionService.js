@@ -131,11 +131,16 @@ async function executeWorkflow(workflow, input = {}) {
     await createLog({
       execution: execId,
       workflow: workflowId,
+      nodeId: err.nodeId,
       agent: 'orchestrator',
       level: 'error',
       event: 'failure',
       message: `Execution failed: ${err.message}`,
-      metadata: { stack: err.stack }
+      metadata: {
+        code: err.code || 'EXECUTION_FAILED',
+        nodeId: err.nodeId || null,
+        stack: err.stack
+      }
     });
 
     const owner = workflow.owner?._id || workflow.owner;
