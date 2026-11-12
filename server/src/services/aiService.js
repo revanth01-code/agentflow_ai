@@ -19,18 +19,24 @@ function extractEmail(prompt = '') {
   return match ? match[0] : '';
 }
 
-function extractQuotedText(prompt = '', fallback = '') {
-  const matches = [...String(prompt).matchAll(/["']([^"']+)["']/g)];
-  if (matches.length > 0) {
-    return matches[matches.length - 1][1];
-  }
-  return fallback;
+function extractMessageBody(prompt = '', fallback = 'Automated message from Agentflow AI') {
+  const text = String(prompt).trim();
+  const explicit = text.match(/\b(?:saying|say|message|body|content)\s*(?:is|:|=)?\s*["']([\s\S]*?)["']/i);
+  if (explicit?.[1]) return explicit[1].trim();
+
+  const quoted = [...text.matchAll(/["']([^"']+)["']/g)]
+    .map((match) => match[1].trim())
+    .filter((value) => value && !/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(value));
+  if (quoted.length > 0) return quoted[quoted.length - 1];
+
+  const unquoted = text.match(/\b(?:saying|say|message|body|content)\s*(?:is|:|=)?\s+(.+)$/i);
+  return unquoted?.[1]?.trim() || fallback;
 }
 
 function extractSubject(prompt = '') {
   const match = String(prompt).match(/subject\s*[:=]?\s*["']([^"']+)["']/i);
   if (match) return match[1];
-  return extractQuotedText(prompt, 'Automation Test');
+  return 'Agentflow Notification';
 }
 
 function isEmailAutomationPrompt(prompt = '') {
@@ -59,7 +65,7 @@ function buildEmailWorkflow(prompt = '') {
       config: {
         to: recipient,
         subject: subject,
-        body: prompt || 'Automated message from AgentFlow AI'
+        body: extractMessageBody(prompt)
       },
       status: 'idle'
     }
@@ -138,7 +144,8 @@ function buildFallbackWorkflow(prompt = '') {
       config: {
         to: extractEmail(prompt) || 'team@example.com',
         subject: extractSubject(prompt),
-        message: prompt
+        body: extractMessageBody(prompt),
+        message: extractMessageBody(prompt)
       },
       status: 'idle'
     },
@@ -228,13 +235,25 @@ function sanitizeGeneratedWorkflow(graph, prompt = '') {
     const posX = node.position && typeof node.position.x === 'number' ? node.position.x : 100 + index * 260;
     const posY = node.position && typeof node.position.y === 'number' ? node.position.y : 150;
 
+    const config = node.config && typeof node.config === 'object' ? { ...node.config } : {};
+    if (node.type === 'send-email') {
+      const extractedEmail = extractEmail(prompt);
+      const extractedBody = extractMessageBody(prompt);
+      if (extractedEmail && (!config.to || config.to === prompt)) config.to = extractedEmail;
+      if (!config.subject || config.subject === prompt) config.subject = extractSubject(prompt);
+      if (!config.body || config.body === prompt || config.body === config.message) {
+        config.body = extractedBody;
+      }
+      delete config.message;
+    }
+
     validNodes.push({
       id,
       type: node.type,
       label: node.label || node.type,
       category,
       position: { x: posX, y: posY },
-      config: node.config && typeof node.config === 'object' ? node.config : {},
+      config,
       status: 'idle'
     });
   });
@@ -293,7 +312,13 @@ async function generateWithOpenRouter(prompt, apiKey) {
         messages: [
           {
             role: 'system',
-            content: `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.`
+            content: `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.
+
+For send-email nodes, extract fields from the user's request rather than copying the raw request:
+- config.to must contain only the email address requested by the user.
+- config.subject must be a relevant subject, or "Agentflow Notification" when no subject is specified.
+- config.body must contain only the core message to send. For example, for "Send an email to someone@example.com saying 'Agentflow test successful!'", set config.body to "Agentflow test successful!" and never to the full prompt.
+Use config.body (not config.message) for email content.`
           },
           { role: 'user', content: prompt }
         ],
@@ -319,7 +344,15 @@ async function generateWithGemini(prompt, apiKey) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: env.geminiModel || 'gemini-1.5-flash' });
-    const promptText = `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}. User request: ${prompt}`;
+    const promptText = `You are an AI workflow architect. Return ONLY a valid JSON object describing a workflow graph with keys: name, description, trigger ({ type, config }), nodes (array of { id, type, label, category, position: { x, y }, config }), edges (array of { id, source, target, animated }). Available types: triggers: ${nodeCatalog.triggers.join(', ')}; actions: ${nodeCatalog.actions.join(', ')}; ai: ${nodeCatalog.ai.join(', ')}; logic: ${nodeCatalog.logic.join(', ')}.
+
+For send-email nodes, extract fields from the user's request rather than copying the raw request:
+- config.to must contain only the requested email address.
+- config.subject must be a relevant subject, or "Agentflow Notification" when none is specified.
+- config.body must contain only the core message to send. For example, for "Send an email to someone@example.com saying 'Agentflow test successful!'", set config.body to "Agentflow test successful!" and never to the full prompt.
+Use config.body (not config.message) for email content.
+
+User request: ${prompt}`;
     const result = await model.generateContent(promptText);
     const text = result.response.text();
     return extractJson(text);
