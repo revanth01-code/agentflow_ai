@@ -69,6 +69,29 @@ function completed(node, data) {
   };
 }
 
+function providerErrorMessage(error) {
+  return error.response?.data?.error?.message ||
+    error.response?.data?.message ||
+    error.rawResponse?.error?.message ||
+    error.rawResponse?.message ||
+    error.message ||
+    'Provider request failed';
+}
+
+function apiFailure(node, error) {
+  const nodeName = node.label || node.id || node.type || 'Workflow node';
+  const providerMessage = providerErrorMessage(error);
+  const wrapped = new Error(
+    `Node '${nodeName}' failed: ${providerMessage}. Please check the node configuration.`
+  );
+  wrapped.code = 'API_FAILURE';
+  wrapped.status = error.response?.status || error.status || 400;
+  wrapped.nodeId = node.id;
+  wrapped.provider = node.type;
+  wrapped.cause = error;
+  return wrapped;
+}
+
 async function runRealAction({ node, workflow, context }) {
   if (node.status === 'disabled') return null;
   const owner = ownerId(workflow);
@@ -142,6 +165,10 @@ async function runRealAction({ node, workflow, context }) {
         return null;
     }
   } catch (err) {
+    if (err.response || err.code === 'API_FAILURE' || (err.status >= 400 && err.status < 500)) {
+      throw apiFailure(node, err);
+    }
+
     if (
       ['gmail-trigger', 'send-email', 'send-slack-message', 'send-discord-message', 'google-sheets-row'].includes(node.type) ||
       err.code === 'INTEGRATION_NOT_CONNECTED' ||

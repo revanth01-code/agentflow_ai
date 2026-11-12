@@ -4,6 +4,7 @@ import { Activity, Blocks, Cable, LayoutDashboard, Library, LogOut, ScrollText, 
 import { useAuthStore } from '../store/authStore';
 import WelcomeModal from './WelcomeModal';
 import FeedbackWidget from './FeedbackWidget';
+import TroubleshootingWidget from './TroubleshootingWidget';
 
 const nav = [
   ['Dashboard', '/dashboard', LayoutDashboard],
@@ -76,6 +77,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
         <div className="p-4 lg:p-8">{children}</div>
       </main>
       <WelcomeModal user={user} />
+      <TroubleshootingWidget />
       <FeedbackWidget />
     </div>
   );
