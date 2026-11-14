@@ -18,7 +18,7 @@ export default function TroubleshootingWidget() {
   if (!visible) return null;
 
   return (
-    <aside className="fixed bottom-20 left-5 z-30 flex max-w-sm items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-xl">
+    <aside className="fixed bottom-20 left-4 right-4 z-30 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 shadow-xl sm:left-5 sm:right-auto sm:max-w-sm">
       <Lightbulb size={18} className="mt-0.5 shrink-0 text-amber-700" />
       <p className="text-xs leading-5">
         <strong>Troubleshooting Tip:</strong> If a workflow fails, please check that you have added your AI API keys in Settings and connected the required accounts (Gmail, Slack, etc.) in Integrations.

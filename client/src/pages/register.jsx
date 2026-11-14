@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { UserPlus } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { API_URL } from '../lib/api';
 
 export default function Register() {
   const router = useRouter();
@@ -11,6 +10,7 @@ export default function Register() {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -28,12 +28,13 @@ export default function Register() {
   };
 
   const continueWithGoogle = () => {
-    window.location.assign(`${API_URL}/auth/google`);
+    setIsGoogleLoading(true);
+    window.location.href = 'https://agentflow-ai-uwhu.onrender.com/api/auth/google';
   };
 
   return (
     <main className="grid min-h-screen place-items-center bg-gradient-to-br from-slate-950 via-teal-950 to-slate-900 px-4">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-white/20 bg-white/90 p-8 shadow-2xl backdrop-blur-xl">
+      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-white/20 bg-white/90 p-6 shadow-2xl backdrop-blur-xl md:p-8">
         <div className="mb-6 flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded bg-teal-700 text-white">
             <UserPlus size={20} />
@@ -89,9 +90,15 @@ export default function Register() {
         <button
           type="button"
           onClick={continueWithGoogle}
+          disabled={isGoogleLoading}
           className="w-full rounded border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
-          Continue with Google
+          {isGoogleLoading ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 size={16} className="animate-spin" />
+              Redirecting to Google...
+            </span>
+          ) : 'Continue with Google'}
         </button>
         <p className="mt-4 text-center text-sm text-slate-500">
           Already registered? <Link href="/login" className="font-semibold text-teal-700">Sign in</Link>

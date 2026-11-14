@@ -56,7 +56,8 @@ const google = asyncHandler(async (_req, res) => {
     prompt: 'select_account',
     state
   });
-  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  res.redirect(302, googleAuthUrl);
 });
 
 const googleCallback = asyncHandler(async (req, res) => {

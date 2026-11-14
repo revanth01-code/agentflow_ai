@@ -11,11 +11,11 @@ export default function MetricGrid({ dashboard }) {
   ];
 
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
       {values.map(([label, value], index) => {
         const Icon = icons[index];
         return (
-          <div key={label} className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+          <div key={label} className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
             <div className="mb-5 flex items-center justify-between">
               <span className="text-sm font-medium text-slate-500">{label}</span>
               <Icon size={18} className="text-teal-700" />

@@ -98,12 +98,12 @@ function IntegrationsContent() {
 
   return (
     <AppShell title="API Integrations">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {providers.map(([id, name, description, placeholder, mode]) => {
           const oauthManaged = mode === 'oauth';
           const credential = drafts[id] || '';
           return (
-            <div key={id} className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+            <div key={id} className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-slate-950">{name}</h2>

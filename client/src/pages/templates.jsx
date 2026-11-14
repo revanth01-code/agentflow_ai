@@ -26,9 +26,9 @@ function TemplatesContent() {
 
   return (
     <AppShell title="Workflow Templates">
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
         {templates.map((template) => (
-          <article key={template._id} className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+          <article key={template._id} className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
             <div className="mb-3 flex items-start justify-between gap-3">
               <h2 className="font-semibold text-slate-950">{template.name}</h2>
               <Copy size={18} className="text-teal-700" />

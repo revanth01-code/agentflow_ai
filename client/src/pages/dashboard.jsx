@@ -19,8 +19,8 @@ function DashboardContent() {
     <AppShell title="Dashboard">
       <div className="space-y-6">
         <MetricGrid dashboard={dashboard} />
-        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-semibold text-slate-950">Recent Workflows</h2>
               <Link href="/workflows/builder" className="text-sm font-semibold text-teal-700">Open Builder</Link>
@@ -38,7 +38,7 @@ function DashboardContent() {
               ))}
             </div>
           </div>
-          <div className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+          <div className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
             <div className="mb-4 flex items-center gap-2">
               <Bot size={18} className="text-teal-700" />
               <h2 className="text-base font-semibold text-slate-950">AI Reasoning Activity</h2>

@@ -279,7 +279,7 @@ function WorkflowCanvasInner() {
   };
 
   return (
-    <div className="grid min-h-[calc(100vh-8rem)] gap-4 xl:grid-cols-[280px_1fr_320px]">
+    <div className="grid min-h-[calc(100vh-8rem)] gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
       <aside className="rounded border border-slate-200 bg-white p-4 shadow-soft">
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase text-slate-500">Builder</p>
@@ -326,7 +326,7 @@ function WorkflowCanvasInner() {
             {message}
           </div>
         )}
-        <div className="h-[720px]">
+        <div className="h-[calc(100vh-100px)] min-h-[50vh] lg:h-[720px]">
           <ReactFlow
             nodes={nodes}
             edges={edges}

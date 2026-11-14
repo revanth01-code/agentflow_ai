@@ -36,14 +36,14 @@ function WorkflowDetailsContent() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 bg-white p-4 shadow-soft">
         <div>
           <p className="text-sm text-slate-500">Status: {activeWorkflow?.status || 'draft'}</p>
-          <h2 className="text-xl font-semibold text-slate-950">{activeWorkflow?.name}</h2>
+          <h2 className="text-lg font-semibold text-slate-950 md:text-xl">{activeWorkflow?.name}</h2>
         </div>
         <button type="button" onClick={runWorkflow} className="rounded bg-teal-700 px-4 py-2 text-sm font-semibold text-white">Execute Now</button>
       </div>
       {status && <p className="mb-4 rounded border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-medium text-teal-900">{status}</p>}
       <div className="mb-4 rounded border border-slate-200 bg-white p-4 shadow-soft">
         <h3 className="mb-3 text-sm font-semibold text-slate-950">Recent Executions</h3>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {executions.map((execution) => (
             <button
               key={execution._id}

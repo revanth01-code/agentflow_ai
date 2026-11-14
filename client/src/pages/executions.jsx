@@ -41,8 +41,8 @@ function ExecutionsContent() {
 
   return (
     <AppShell title="Execution Logs">
-      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <section className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="grid gap-6 lg:grid-cols-[420px_minmax(0,1fr)]">
+        <section className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
           <h2 className="mb-4 text-base font-semibold text-slate-950">Executions</h2>
           <div className="space-y-2">
             {executions.map((execution) => (
@@ -67,7 +67,7 @@ function ExecutionsContent() {
             {executions.length === 0 && <p className="py-8 text-sm text-slate-500">No execution records yet.</p>}
           </div>
         </section>
-        <section className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+        <section className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
           <h2 className="mb-4 text-base font-semibold text-slate-950">AI Reasoning Timeline</h2>
           {selectedExecution?.status === 'PAUSED' && (
             <form onSubmit={resumePausedExecution} className="mb-5 rounded border border-amber-200 bg-amber-50 p-4">

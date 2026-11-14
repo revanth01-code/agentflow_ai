@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Activity, Blocks, Cable, LayoutDashboard, Library, LogOut, ScrollText, Settings, Zap } from 'lucide-react';
+import { Activity, Blocks, Cable, LayoutDashboard, Library, LogOut, Menu, ScrollText, Settings, X, Zap } from 'lucide-react';
+import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import WelcomeModal from './WelcomeModal';
 import FeedbackWidget from './FeedbackWidget';
@@ -18,6 +19,7 @@ const nav = [
 export default function AppShell({ children, title = 'AI Operations' }) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -26,7 +28,20 @@ export default function AppShell({ children, title = 'AI Operations' }) {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <aside data-tour="sidebar" className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white px-4 py-5 lg:block">
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-20 bg-slate-950/40 md:hidden"
+        />
+      )}
+      <aside
+        data-tour="sidebar"
+        className={`fixed inset-y-0 left-0 z-30 w-64 border-r border-slate-200 bg-white px-4 py-5 transition-transform md:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="mb-8 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded bg-teal-700 text-white">
             <Zap size={20} />
@@ -48,6 +63,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
                 className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-medium ${
                   active ? 'bg-teal-50 text-teal-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                 }`}
+              onClick={() => setSidebarOpen(false)}
               >
                 <Icon size={18} />
                 {label}
@@ -56,9 +72,17 @@ export default function AppShell({ children, title = 'AI Operations' }) {
           })}
         </nav>
       </aside>
-      <main className="lg:pl-64">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-8">
+      <main className="min-h-screen overflow-y-auto md:pl-64">
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-8">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="grid h-9 w-9 place-items-center rounded border border-slate-200 text-slate-600 hover:bg-slate-100 md:hidden"
+              aria-label="Open navigation"
+            >
+              {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
+            </button>
             <Activity className="text-teal-700" size={20} />
             <h1 className="text-base font-semibold text-slate-950">{title}</h1>
           </div>
@@ -74,7 +98,7 @@ export default function AppShell({ children, title = 'AI Operations' }) {
             </button>
           </div>
         </header>
-        <div className="p-4 lg:p-8">{children}</div>
+        <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8">{children}</div>
       </main>
       <WelcomeModal user={user} />
       <TroubleshootingWidget />

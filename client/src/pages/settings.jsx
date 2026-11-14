@@ -27,8 +27,8 @@ export default function SettingsPage() {
   return (
     <ProtectedRoute>
       <AppShell title="Settings">
-        <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <section className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <section className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
             <div className="mb-4 flex items-center gap-2">
               <ShieldCheck className="text-teal-700" size={20} />
               <h2 className="text-base font-semibold text-slate-950">Security</h2>
@@ -43,7 +43,7 @@ export default function SettingsPage() {
               </p>
             </div>
           </section>
-          <section className="rounded border border-slate-200 bg-white p-5 shadow-soft">
+          <section className="rounded border border-slate-200 bg-white p-4 shadow-soft md:p-5">
             <h2 className="mb-2 text-base font-semibold text-slate-950">AI Provider Settings</h2>
             <p className="mb-4 text-sm text-slate-600">
               Add your own provider keys. Keys are encrypted before they are stored and are never displayed again.
